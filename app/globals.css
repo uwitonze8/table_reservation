@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+:root {
+  /* Custom Restaurant Color Palette */
+  --warm-accent: #FF6B35;      /* Vibrant Orange for buttons & highlights */
+  --neutral-bg: #F8F4F0;       /* Light Beige background */
+  --dark-contrast: #333333;    /* Dark Gray for text */
+
+  /* Default theme variables */
+  --background: #F8F4F0;
+  --foreground: #333333;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Typography Scale - Medium Weight */
+h1, .text-3xl, .text-4xl {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+h2, .text-2xl {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+h3, .text-xl {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+h4, .text-lg {
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+p, .text-base {
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.text-sm {
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+/* Buttons with slightly more weight */
+button, .button {
+  font-weight: 600;
+}
+
+/* Links */
+a {
+  font-weight: 500;
+}
