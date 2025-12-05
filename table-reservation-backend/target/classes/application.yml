@@ -1,3 +1,11 @@
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/table_reservation
+    username: your_db_username
+    password: your_db_password
+    driver-class-name: org.postgresql.Driver
+
 server:
   port: 8081
 
@@ -13,6 +21,7 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   # JPA/Hibernate Configuration
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -20,6 +29,33 @@ spring:
     properties:
       hibernate:
         format_sql: true
+
+
+server:
+  port: 8080
+
+jwt:
+  secret: your_jwt_secret
+  expiration: 86400000 # 1 day in milliseconds
+
+spring:
+  security:
+    user:
+      name: user
+      password: password
+
+swagger:
+  enabled: true
+  path: /api-docs
+  title: Table Reservation API
+  description: API documentation for the Table Reservation System
+  version: 1.0.0
+
+cors:
+  allowed-origins: "http://localhost:3000"
+  allowed-methods: "GET, POST, PUT, DELETE, OPTIONS"
+  allowed-headers: "Authorization, Content-Type"
+
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   # Mail Configuration
@@ -73,3 +109,4 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: method
     tagsSorter: alpha
+

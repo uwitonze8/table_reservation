@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+
+# Maven wrapper script to run Maven commands without requiring a local installation of Maven.
+
+MAVEN_OPTS="-Xmx1024m -XX:MaxPermSize=256m"
+
+# Check if the user has specified a command
+if [ "$#" -eq 0 ]; then
+    echo "Usage: mvnw <command>"
+    exit 1
+fi
+
+# Execute Maven with the specified command
+exec ./mvnw "$@"
