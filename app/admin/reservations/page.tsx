@@ -148,7 +148,7 @@ export default function AdminReservationsPage() {
             {error}
             <button
               onClick={fetchReservations}
-              className="ml-4 text-red-700 underline hover:no-underline"
+              className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
             >
               Retry
             </button>
@@ -216,7 +216,7 @@ export default function AdminReservationsPage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setFilter('all')}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === 'all'
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -226,7 +226,7 @@ export default function AdminReservationsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('confirmed')}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === 'confirmed'
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -236,7 +236,7 @@ export default function AdminReservationsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('pending')}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === 'pending'
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -246,7 +246,7 @@ export default function AdminReservationsPage() {
                 </button>
                 <button
                   onClick={() => setFilter('cancelled')}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === 'cancelled'
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -311,7 +311,7 @@ export default function AdminReservationsPage() {
                           <div className="flex gap-1.5">
                             <button
                               onClick={() => setSelectedReservation(reservation)}
-                              className="p-1 text-[#FF6B35] hover:bg-[#FF6B35] hover:bg-opacity-10 rounded transition-colors"
+                              className="p-1 text-[#FF6B35] hover:bg-[#FF6B35] hover:bg-opacity-10 rounded transition-colors cursor-pointer"
                               title="View Details"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,7 +323,7 @@ export default function AdminReservationsPage() {
                               <button
                                 onClick={() => handleConfirmReservation(reservation)}
                                 disabled={actionLoading}
-                                className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50"
+                                className="p-1 text-green-600 hover:bg-green-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                                 title="Confirm"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -335,7 +335,7 @@ export default function AdminReservationsPage() {
                               <button
                                 onClick={() => handleCompleteReservation(reservation)}
                                 disabled={actionLoading}
-                                className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+                                className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                                 title="Mark as Completed"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -347,7 +347,7 @@ export default function AdminReservationsPage() {
                               <button
                                 onClick={() => handleCancelClick(reservation)}
                                 disabled={actionLoading}
-                                className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
                                 title="Cancel"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -369,13 +369,13 @@ export default function AdminReservationsPage() {
 
       {/* Reservation Details Modal */}
       {selectedReservation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h2 className="text-xl font-bold text-[#333333]">Reservation Details</h2>
               <button
                 onClick={() => setSelectedReservation(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -440,7 +440,7 @@ export default function AdminReservationsPage() {
                   <button
                     onClick={() => handleConfirmReservation(selectedReservation)}
                     disabled={actionLoading}
-                    className="flex-1 bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="flex-1 bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Confirm Reservation
                   </button>
@@ -449,7 +449,7 @@ export default function AdminReservationsPage() {
                   <button
                     onClick={() => handleCompleteReservation(selectedReservation)}
                     disabled={actionLoading}
-                    className="flex-1 bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Mark as Completed
                   </button>
@@ -458,7 +458,7 @@ export default function AdminReservationsPage() {
                   <button
                     onClick={() => handleCancelClick(selectedReservation)}
                     disabled={actionLoading}
-                    className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                    className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Cancel Reservation
                   </button>
@@ -471,7 +471,7 @@ export default function AdminReservationsPage() {
 
       {/* Cancel Confirmation Dialog */}
       {showCancelDialog && reservationToCancel && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center gap-3">
@@ -519,14 +519,14 @@ export default function AdminReservationsPage() {
                     setReservationToCancel(null);
                   }}
                   disabled={actionLoading}
-                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Keep Reservation
                 </button>
                 <button
                   onClick={handleConfirmCancel}
                   disabled={actionLoading}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {actionLoading ? 'Cancelling...' : 'Cancel Reservation'}
                 </button>
