@@ -46,10 +46,151 @@ export default function ReservationPage() {
     }
   }, [isLoggedIn, router]);
 
+  // Convert 12-hour time to minutes from midnight for comparison
+  const timeToMinutes = (time12h: string): number => {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+
+    if (modifier === 'PM' && hours !== 12) {
+      hours += 12;
+    }
+    if (modifier === 'AM' && hours === 12) {
+      hours = 0;
+    }
+
+    return hours * 60 + minutes;
+  };
+
+  // Get time slots based on day of the week
+  // Opening Hours:
+  // Monday - Friday: 5:00 AM - 11:00 PM
+  // Saturday: 5:00 AM - 2:00 AM (next day)
+  // Sunday: 11:30 AM - 9:00 PM
+  const getTimeSlotsForDay = (dateString: string): string[] => {
+    if (!dateString) return [];
+
+    const date = new Date(dateString + 'T00:00:00');
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+    // Generate time slots in 30-minute intervals
+    const generateSlots = (startHour: number, startMin: number, endHour: number, endMin: number): string[] => {
+      const slots: string[] = [];
+      let hour = startHour;
+      let min = startMin;
+
+      while (hour < endHour || (hour === endHour && min <= endMin)) {
+        // Don't add slots too close to closing time (need at least 1 hour before close)
+        const currentMinutes = hour * 60 + min;
+        const closingMinutes = endHour * 60 + endMin;
+        if (closingMinutes - currentMinutes < 60) break;
+
+        // Convert to 12-hour format
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        const ampm = hour < 12 ? 'AM' : 'PM';
+        const timeStr = `${displayHour}:${min.toString().padStart(2, '0')} ${ampm}`;
+        slots.push(timeStr);
+
+        // Increment by 30 minutes
+        min += 30;
+        if (min >= 60) {
+          min = 0;
+          hour++;
+        }
+      }
+
+      return slots;
+    };
+
+    switch (dayOfWeek) {
+      case 0: // Sunday: 11:30 AM - 9:00 PM
+        return generateSlots(11, 30, 21, 0);
+      case 6: // Saturday: 5:00 AM - 2:00 AM (we'll limit to midnight for same-day booking)
+        return generateSlots(5, 0, 24, 0);
+      default: // Monday - Friday: 5:00 AM - 11:00 PM
+        return generateSlots(5, 0, 23, 0);
+    }
+  };
+
+  // Get available time slots based on selected date
+  const getAvailableTimeSlots = (): string[] => {
+    const daySlots = getTimeSlotsForDay(formData.date);
+    const today = new Date().toISOString().split('T')[0];
+
+    // If not today, return all time slots for that day
+    if (formData.date !== today) {
+      return daySlots;
+    }
+
+    // If today, filter out past times (only show future time slots)
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return daySlots.filter(slot => timeToMinutes(slot) > currentMinutes);
+  };
+
+  const availableTimeSlots = getAvailableTimeSlots();
+
+  // Get day name for display
+  const getDayName = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  };
+
+  // Get opening hours text for the selected day
+  const getOpeningHoursText = (): string => {
+    if (!formData.date) return '';
+    const date = new Date(formData.date + 'T00:00:00');
+    const dayOfWeek = date.getDay();
+
+    switch (dayOfWeek) {
+      case 0: return 'Sunday: 11:30 AM - 9:00 PM';
+      case 6: return 'Saturday: 5:00 AM - 2:00 AM';
+      default: return 'Mon-Fri: 5:00 AM - 11:00 PM';
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+
+    // If date changed, check if currently selected time is still valid
+    if (name === 'date') {
+      const today = new Date().toISOString().split('T')[0];
+      const newDaySlots = getTimeSlotsForDay(value);
+
+      // Check if current time selection exists in the new day's slots
+      let shouldResetTime = false;
+
+      if (formData.time) {
+        // Check if the selected time exists in the new day's available slots
+        const timeExistsInNewDay = newDaySlots.includes(formData.time);
+
+        if (!timeExistsInNewDay) {
+          shouldResetTime = true;
+        } else if (value === today) {
+          // If today, also check if time hasn't passed
+          const now = new Date();
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+          if (timeToMinutes(formData.time) <= currentMinutes) {
+            shouldResetTime = true;
+          }
+        }
+      }
+
+      if (shouldResetTime) {
+        setFormData({
+          ...formData,
+          date: value,
+          time: '',
+        });
+        return;
+      }
+    }
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
   };
 
@@ -143,7 +284,7 @@ export default function ReservationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F4F0] py-6 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#F8F4F0] pt-20 pb-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-4">
@@ -345,27 +486,24 @@ export default function ReservationPage() {
                     value={formData.time}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                    disabled={!formData.date}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="">Select Time</option>
-                    <option value="11:00 AM">11:00 AM</option>
-                    <option value="11:30 AM">11:30 AM</option>
-                    <option value="12:00 PM">12:00 PM</option>
-                    <option value="12:30 PM">12:30 PM</option>
-                    <option value="1:00 PM">1:00 PM</option>
-                    <option value="1:30 PM">1:30 PM</option>
-                    <option value="2:00 PM">2:00 PM</option>
-                    <option value="5:00 PM">5:00 PM</option>
-                    <option value="5:30 PM">5:30 PM</option>
-                    <option value="6:00 PM">6:00 PM</option>
-                    <option value="6:30 PM">6:30 PM</option>
-                    <option value="7:00 PM">7:00 PM</option>
-                    <option value="7:30 PM">7:30 PM</option>
-                    <option value="8:00 PM">8:00 PM</option>
-                    <option value="8:30 PM">8:30 PM</option>
-                    <option value="9:00 PM">9:00 PM</option>
-                    <option value="9:30 PM">9:30 PM</option>
+                    <option value="">{!formData.date ? 'Select date first' : 'Select Time'}</option>
+                    {availableTimeSlots.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
                   </select>
+                  {formData.date && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getOpeningHoursText()}
+                    </p>
+                  )}
+                  {formData.date === new Date().toISOString().split('T')[0] && availableTimeSlots.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">No available times left for today. Please select another date.</p>
+                  )}
                 </div>
               </div>
 

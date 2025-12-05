@@ -125,7 +125,7 @@ export default function StaffTablesPage() {
             </div>
             <button
               onClick={fetchTables}
-              className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold"
+              className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold cursor-pointer"
             >
               Refresh
             </button>
@@ -134,7 +134,7 @@ export default function StaffTablesPage() {
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
               {error}
-              <button onClick={fetchTables} className="ml-4 underline hover:no-underline">
+              <button onClick={fetchTables} className="ml-4 underline hover:no-underline cursor-pointer">
                 Retry
               </button>
             </div>
@@ -180,7 +180,7 @@ export default function StaffTablesPage() {
                     <button
                       key={key}
                       onClick={() => setFilter(key)}
-                      className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-colors ${
+                      className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-colors cursor-pointer ${
                         filter === key
                           ? `${color} text-white`
                           : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -196,7 +196,7 @@ export default function StaffTablesPage() {
                 <select
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                 >
                   <option value="all">All Locations</option>
                   <option value="WINDOW">Window</option>
@@ -222,7 +222,7 @@ export default function StaffTablesPage() {
                   <button
                     key={table.id}
                     onClick={() => setSelectedTable(table)}
-                    className={`p-4 rounded-lg border-2 transition-all hover:shadow-lg ${getStatusColor(table.status)}`}
+                    className={`p-4 rounded-lg border-2 transition-all hover:shadow-lg cursor-pointer ${getStatusColor(table.status)}`}
                   >
                     <div className="text-center">
                       <p className="text-xl font-bold mb-1">#{table.tableNumber}</p>
@@ -278,7 +278,7 @@ export default function StaffTablesPage() {
                         <td className="py-3 px-3">
                           <button
                             onClick={() => setSelectedTable(table)}
-                            className="text-[#FF6B35] hover:text-[#e55a2b] text-xs font-semibold"
+                            className="text-[#FF6B35] hover:text-[#e55a2b] text-xs font-semibold cursor-pointer"
                           >
                             Manage
                           </button>
@@ -295,7 +295,7 @@ export default function StaffTablesPage() {
 
       {/* Table Details Modal */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <div>
@@ -304,7 +304,7 @@ export default function StaffTablesPage() {
               </div>
               <button
                 onClick={() => setSelectedTable(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -341,7 +341,7 @@ export default function StaffTablesPage() {
                   <button
                     onClick={() => handleUpdateTableStatus(selectedTable.id, 'AVAILABLE')}
                     disabled={actionLoading}
-                    className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Clear Table (Mark as Available)
                   </button>
@@ -351,14 +351,14 @@ export default function StaffTablesPage() {
                     <button
                       onClick={() => handleUpdateTableStatus(selectedTable.id, 'OCCUPIED')}
                       disabled={actionLoading}
-                      className="w-full bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                      className="w-full bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Mark as Occupied
                     </button>
                     <button
                       onClick={() => handleUpdateTableStatus(selectedTable.id, 'RESERVED')}
                       disabled={actionLoading}
-                      className="w-full bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      className="w-full bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Mark as Reserved
                     </button>
@@ -369,14 +369,14 @@ export default function StaffTablesPage() {
                     <button
                       onClick={() => handleUpdateTableStatus(selectedTable.id, 'OCCUPIED')}
                       disabled={actionLoading}
-                      className="w-full bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                      className="w-full bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Seat Reserved Guests
                     </button>
                     <button
                       onClick={() => handleUpdateTableStatus(selectedTable.id, 'AVAILABLE')}
                       disabled={actionLoading}
-                      className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                      className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
                     >
                       Release Reservation
                     </button>
@@ -386,7 +386,7 @@ export default function StaffTablesPage() {
                   <button
                     onClick={() => handleUpdateTableStatus(selectedTable.id, 'AVAILABLE')}
                     disabled={actionLoading}
-                    className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                    className="w-full bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Mark as Available
                   </button>
@@ -395,14 +395,14 @@ export default function StaffTablesPage() {
                   <button
                     onClick={() => handleUpdateTableStatus(selectedTable.id, 'MAINTENANCE')}
                     disabled={actionLoading}
-                    className="w-full bg-gray-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50"
+                    className="w-full bg-gray-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Mark for Maintenance
                   </button>
                 )}
                 <button
                   onClick={() => setSelectedTable(null)}
-                  className="w-full bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="w-full bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
                 >
                   Close
                 </button>

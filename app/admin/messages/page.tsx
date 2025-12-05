@@ -195,7 +195,7 @@ export default function AdminMessagesPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === f
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -270,8 +270,8 @@ export default function AdminMessagesPage() {
 
       {/* Message Detail Modal */}
       {selectedMessage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 cursor-pointer" onClick={() => setSelectedMessage(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto cursor-default" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white">
               <div>
                 <h2 className="text-xl font-bold text-[#333333]">Message Details</h2>
@@ -281,7 +281,7 @@ export default function AdminMessagesPage() {
               </div>
               <button
                 onClick={() => setSelectedMessage(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -355,7 +355,7 @@ export default function AdminMessagesPage() {
                   <button
                     onClick={handleReply}
                     disabled={actionLoading || !replyText.trim()}
-                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50"
+                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {actionLoading ? 'Sending...' : 'Send Reply'}
                   </button>
@@ -363,13 +363,13 @@ export default function AdminMessagesPage() {
                 <button
                   onClick={() => handleDelete(selectedMessage.id)}
                   disabled={actionLoading}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   Delete Message
                 </button>
                 <button
                   onClick={() => setSelectedMessage(null)}
-                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
                 >
                   Close
                 </button>
