@@ -1,87 +1,112 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import ReservationTicket from '@/components/customer/ReservationTicket';
 import CustomerSidebar from '@/components/customer/CustomerSidebar';
+import { reservationApi, tableApi, Reservation, Table } from '@/lib/api';
 
-// Mock data for demonstration - Extended with more details
-const mockReservations = [
-  {
-    id: 'RES-001',
-    date: '2025-12-01',
-    time: '7:00 PM',
-    guests: 4,
-    tableName: 'Table 5 (Window Seat)',
-    tableNumber: 5,
-    status: 'confirmed',
-    specialRequests: 'Window seat preferred, Birthday celebration',
-    createdAt: '2025-11-20',
-    loyaltyPointsEarned: 40,
-  },
-  {
-    id: 'RES-002',
-    date: '2025-11-28',
-    time: '6:30 PM',
-    guests: 2,
-    tableName: 'Table 12 (Patio)',
-    tableNumber: 12,
-    status: 'completed',
-    specialRequests: 'Anniversary dinner',
-    createdAt: '2025-11-15',
-    loyaltyPointsEarned: 20,
-  },
-  {
-    id: 'RES-003',
-    date: '2025-11-25',
-    time: '8:00 PM',
-    guests: 6,
-    tableName: 'Table 10 (Private Room)',
-    tableNumber: 10,
-    status: 'completed',
-    specialRequests: 'High chairs needed',
-    createdAt: '2025-11-10',
-    loyaltyPointsEarned: 60,
-  },
-  {
-    id: 'RES-004',
-    date: '2025-11-20',
-    time: '12:00 PM',
-    guests: 3,
-    tableName: 'Table 3 (Garden View)',
-    tableNumber: 3,
-    status: 'completed',
-    specialRequests: 'None',
-    createdAt: '2025-11-10',
-    loyaltyPointsEarned: 30,
-  },
-  {
-    id: 'RES-005',
-    date: '2025-11-15',
-    time: '1:00 PM',
-    guests: 2,
-    tableName: 'Table 8 (Booth)',
-    tableNumber: 8,
-    status: 'cancelled',
-    specialRequests: 'Quiet area',
-    createdAt: '2025-11-05',
-    loyaltyPointsEarned: 0,
-  },
-];
+interface DisplayReservation {
+  id: string;
+  numericId: number;
+  date: string;
+  time: string;
+  time24: string;
+  guests: number;
+  tableName: string;
+  tableNumber: number;
+  tableId: number;
+  status: string;
+  specialRequests: string;
+  createdAt: string;
+  loyaltyPointsEarned: number;
+}
+
+// Convert 24h time to 12h format
+const formatTime = (time24: string): string => {
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours, 10);
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minutes} ${ampm}`;
+};
+
+// Map API reservation to display format
+const mapReservation = (res: Reservation): DisplayReservation => ({
+  id: res.reservationCode,
+  numericId: res.id,
+  date: res.reservationDate,
+  time: formatTime(res.reservationTime),
+  time24: res.reservationTime,
+  guests: res.numberOfGuests,
+  tableName: `Table ${res.tableNumber} (${res.tableLocation})`,
+  tableNumber: res.tableNumber,
+  tableId: res.tableId,
+  status: res.status.toLowerCase(),
+  specialRequests: res.specialRequests || 'None',
+  createdAt: res.createdAt.split('T')[0],
+  loyaltyPointsEarned: res.loyaltyPointsEarned,
+});
 
 export default function MyReservationsPage() {
   const { user, isLoggedIn } = useAuth();
   const router = useRouter();
-  const [reservations] = useState(mockReservations);
+  const [reservations, setReservations] = useState<DisplayReservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Modify modal state
+  const [showModifyModal, setShowModifyModal] = useState(false);
+  const [reservationToModify, setReservationToModify] = useState<DisplayReservation | null>(null);
+  const [modifyForm, setModifyForm] = useState({
+    date: '',
+    time: '',
+    guests: 1,
+    specialRequests: '',
+    tableId: 0,
+  });
+  const [availableTables, setAvailableTables] = useState<Table[]>([]);
+  const [modifyLoading, setModifyLoading] = useState(false);
+  const [tablesLoading, setTablesLoading] = useState(false);
 
   // Redirect if not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.push('/login');
+    }
+  }, [isLoggedIn, router]);
+
+  // Fetch reservations from API
+  useEffect(() => {
+    const fetchReservations = async () => {
+      if (!isLoggedIn) return;
+
+      try {
+        setLoading(true);
+        const response = await reservationApi.getMyReservations();
+        if (response.success && response.data) {
+          const mapped = response.data.map(mapReservation);
+          setReservations(mapped);
+        } else {
+          setError(response.message || 'Failed to load reservations');
+        }
+      } catch (err) {
+        setError('Failed to load reservations. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReservations();
+  }, [isLoggedIn]);
+
   if (!isLoggedIn) {
-    router.push('/login');
     return null;
   }
 
@@ -137,6 +162,127 @@ export default function MyReservationsPage() {
     router.push(`/reservation?rebook=${reservation.id}`);
   };
 
+  const handleCancel = async (reservationId: string) => {
+    if (!confirm('Are you sure you want to cancel this reservation?')) {
+      return;
+    }
+
+    setCancellingId(reservationId);
+    try {
+      const response = await reservationApi.cancel(reservationId);
+      if (response.success) {
+        // Update the reservation status locally
+        setReservations(prev =>
+          prev.map(r =>
+            r.id === reservationId ? { ...r, status: 'cancelled' } : r
+          )
+        );
+      } else {
+        alert(response.message || 'Failed to cancel reservation');
+      }
+    } catch (err) {
+      alert('Failed to cancel reservation. Please try again.');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  // Open modify modal with reservation data
+  const handleOpenModify = async (reservation: DisplayReservation) => {
+    setReservationToModify(reservation);
+    setModifyForm({
+      date: reservation.date,
+      time: reservation.time24,
+      guests: reservation.guests,
+      specialRequests: reservation.specialRequests === 'None' ? '' : reservation.specialRequests,
+      tableId: reservation.tableId,
+    });
+    setShowModifyModal(true);
+
+    // Fetch available tables for the current date/time
+    await fetchAvailableTables(reservation.date, reservation.time24, reservation.guests);
+  };
+
+  // Fetch available tables when date/time/guests change
+  const fetchAvailableTables = async (date: string, time: string, guests: number) => {
+    if (!date || !time) return;
+
+    setTablesLoading(true);
+    try {
+      const response = await tableApi.getAvailable(date, time, guests);
+      if (response.success && response.data) {
+        setAvailableTables(response.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch available tables:', err);
+    } finally {
+      setTablesLoading(false);
+    }
+  };
+
+  // Handle form field changes
+  const handleModifyFormChange = async (field: string, value: string | number) => {
+    const newForm = { ...modifyForm, [field]: value };
+    setModifyForm(newForm);
+
+    // Refetch available tables when date, time, or guests change
+    if (field === 'date' || field === 'time' || field === 'guests') {
+      await fetchAvailableTables(
+        field === 'date' ? value as string : newForm.date,
+        field === 'time' ? value as string : newForm.time,
+        field === 'guests' ? value as number : newForm.guests
+      );
+    }
+  };
+
+  // Submit modification
+  const handleSubmitModify = async () => {
+    if (!reservationToModify) return;
+
+    setModifyLoading(true);
+    try {
+      const response = await reservationApi.update(reservationToModify.numericId, {
+        reservationDate: modifyForm.date,
+        reservationTime: modifyForm.time,
+        numberOfGuests: modifyForm.guests,
+        tableId: modifyForm.tableId,
+        specialRequests: modifyForm.specialRequests || undefined,
+        customerName: user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
+        customerEmail: user?.email || '',
+        customerPhone: user?.phone || '',
+      });
+
+      if (response.success) {
+        // Refresh reservations list
+        const refreshResponse = await reservationApi.getMyReservations();
+        if (refreshResponse.success && refreshResponse.data) {
+          setReservations(refreshResponse.data.map(mapReservation));
+        }
+        setShowModifyModal(false);
+        setReservationToModify(null);
+        alert('Reservation modified successfully!');
+      } else {
+        alert(response.message || 'Failed to modify reservation');
+      }
+    } catch (err) {
+      alert('Failed to modify reservation. Please try again.');
+    } finally {
+      setModifyLoading(false);
+    }
+  };
+
+  // Generate time slots
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 11; hour <= 21; hour++) {
+      for (let min = 0; min < 60; min += 30) {
+        const time = `${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+        slots.push(time);
+      }
+    }
+    return slots;
+  };
+
   const totalLoyaltyPoints = reservations
     .filter(r => r.status === 'completed')
     .reduce((sum, r) => sum + r.loyaltyPointsEarned, 0);
@@ -176,7 +322,7 @@ export default function MyReservationsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'all'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -186,7 +332,7 @@ export default function MyReservationsPage() {
               </button>
               <button
                 onClick={() => setFilter('confirmed')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'confirmed'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -196,7 +342,7 @@ export default function MyReservationsPage() {
               </button>
               <button
                 onClick={() => setFilter('completed')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'completed'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -207,8 +353,29 @@ export default function MyReservationsPage() {
             </div>
           </div>
 
-          {/* Reservations List */}
-          {filteredReservations.length === 0 ? (
+          {/* Loading State */}
+          {loading ? (
+            <div className="bg-white rounded-lg shadow-md p-8 text-center">
+              <div className="animate-spin w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-sm text-[#333333] opacity-70">Loading your reservations...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white rounded-lg shadow-md p-8 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-[#333333] mb-2">Error Loading Reservations</h3>
+              <p className="text-sm text-[#333333] opacity-70 mb-4">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-block bg-[#FF6B35] text-white px-6 py-2 text-sm rounded-full font-semibold hover:bg-[#e55a2b] transition-all cursor-pointer"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filteredReservations.length === 0 ? (
             <div className="bg-white rounded-lg shadow-md p-8 text-center">
               <div className="w-16 h-16 bg-[#F8F4F0] rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -298,20 +465,23 @@ export default function MyReservationsPage() {
 
                   {/* Actions */}
                   <div className="flex flex-col gap-1.5">
-                    <button
-                      onClick={() => handlePrintTicket(reservation)}
-                      className="w-full bg-[#FF6B35] text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#e55a2b] transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                      </svg>
-                      Print
-                    </button>
+                    {/* Print button - only show for confirmed and completed reservations */}
+                    {(reservation.status === 'confirmed' || reservation.status === 'completed') && (
+                      <button
+                        onClick={() => handlePrintTicket(reservation)}
+                        className="w-full bg-[#FF6B35] text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#e55a2b] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                        </svg>
+                        Print
+                      </button>
+                    )}
 
                     {reservation.status === 'completed' && (
                       <button
                         onClick={() => handleRebook(reservation)}
-                        className="w-full bg-blue-600 text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5"
+                        className="w-full bg-blue-600 text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -322,17 +492,36 @@ export default function MyReservationsPage() {
 
                     {reservation.status === 'confirmed' && (
                       <>
-                        <button className="w-full bg-white text-[#FF6B35] border border-[#FF6B35] px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#FF6B35] hover:text-white transition-all flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleOpenModify(reservation)}
+                          className="w-full bg-white text-[#FF6B35] border border-[#FF6B35] px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#FF6B35] hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           Modify
                         </button>
-                        <button className="w-full bg-white text-red-600 border border-red-600 px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                          Cancel
+                        <button
+                          onClick={() => handleCancel(reservation.id)}
+                          disabled={cancellingId === reservation.id}
+                          className="w-full bg-white text-red-600 border border-red-600 px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                        >
+                          {cancellingId === reservation.id ? (
+                            <>
+                              <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                              Cancelling...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              Cancel
+                            </>
+                          )}
                         </button>
                       </>
                     )}
@@ -399,6 +588,166 @@ export default function MyReservationsPage() {
             setSelectedReservation(null);
           }}
         />
+      )}
+
+      {/* Modify Reservation Modal */}
+      {showModifyModal && reservationToModify && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <div>
+                <h2 className="text-xl font-bold text-[#333333]">Modify Reservation</h2>
+                <p className="text-xs text-[#333333] opacity-70">
+                  Reservation: {reservationToModify.id}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModifyModal(false);
+                  setReservationToModify(null);
+                }}
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4">
+              {/* Date */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333333] mb-1">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={modifyForm.date}
+                  onChange={(e) => handleModifyFormChange('date', e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
+                />
+              </div>
+
+              {/* Time */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333333] mb-1">
+                  Time
+                </label>
+                <select
+                  value={modifyForm.time}
+                  onChange={(e) => handleModifyFormChange('time', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
+                >
+                  <option value="">Select time</option>
+                  {generateTimeSlots().map((time) => (
+                    <option key={time} value={time}>
+                      {formatTime(time)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Number of Guests */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333333] mb-1">
+                  Number of Guests
+                </label>
+                <select
+                  value={modifyForm.guests}
+                  onChange={(e) => handleModifyFormChange('guests', parseInt(e.target.value))}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                    <option key={num} value={num}>
+                      {num} {num === 1 ? 'guest' : 'guests'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Table Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333333] mb-1">
+                  Table
+                </label>
+                {tablesLoading ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="animate-spin w-4 h-4 border-2 border-[#FF6B35] border-t-transparent rounded-full"></div>
+                    <span className="text-xs text-[#333333] opacity-70">Loading available tables...</span>
+                  </div>
+                ) : availableTables.length === 0 ? (
+                  <p className="text-xs text-red-600 py-2">
+                    No tables available for selected date/time. Please try a different time.
+                  </p>
+                ) : (
+                  <select
+                    value={modifyForm.tableId}
+                    onChange={(e) => handleModifyFormChange('tableId', parseInt(e.target.value))}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
+                  >
+                    <option value={0}>Select a table</option>
+                    {availableTables.map((table) => (
+                      <option key={table.id} value={table.id}>
+                        Table {table.tableNumber} - {table.location} (Seats {table.capacity})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Special Requests */}
+              <div>
+                <label className="block text-xs font-semibold text-[#333333] mb-1">
+                  Special Requests (optional)
+                </label>
+                <textarea
+                  value={modifyForm.specialRequests}
+                  onChange={(e) => handleModifyFormChange('specialRequests', e.target.value)}
+                  placeholder="Any special requests or dietary requirements..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none resize-none"
+                />
+              </div>
+
+              {/* Policy Note */}
+              <div className="bg-[#F8F4F0] p-3 rounded-lg">
+                <p className="text-xs text-[#333333] opacity-70">
+                  <strong>Note:</strong> Modifications can be made up to 4 hours before your reservation time.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-200 flex gap-2">
+              <button
+                onClick={handleSubmitModify}
+                disabled={modifyLoading || !modifyForm.tableId || tablesLoading}
+                className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {modifyLoading ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowModifyModal(false);
+                  setReservationToModify(null);
+                }}
+                className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

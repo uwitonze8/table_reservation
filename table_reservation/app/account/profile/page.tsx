@@ -1,32 +1,32 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import CustomerSidebar from '@/components/customer/CustomerSidebar';
+import { reservationApi, Reservation } from '@/lib/api';
+
+interface UserStats {
+  totalBookings: number;
+  upcomingBookings: number;
+  completedBookings: number;
+  cancelledBookings: number;
+  loyaltyPoints: number;
+}
 
 export default function ProfilePage() {
-  const { user, isLoggedIn, logout } = useAuth();
+  const { user, isLoggedIn } = useAuth();
   const router = useRouter();
-
-  // Redirect if not logged in
-  if (!isLoggedIn) {
-    router.push('/login');
-    return null;
-  }
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isEditing, setIsEditing] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [profileData, setProfileData] = useState({
-    firstName: user?.name?.split(' ')[0] || 'John',
-    lastName: user?.name?.split(' ')[1] || 'Doe',
-    email: user?.email || 'john.doe@example.com',
-    phone: user?.phone || '(555) 123-4567',
-    birthday: '1990-05-15',
-    dietaryPreferences: ['Vegetarian'],
-    favoriteTable: 'Window seat',
-    specialRequests: 'Prefer quiet area',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -37,14 +37,63 @@ export default function ProfilePage() {
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [saveError, setSaveError] = useState(false);
 
-  const userStats = {
-    totalBookings: 24,
-    upcomingBookings: 2,
-    completedBookings: 22,
-    cancelledBookings: 0,
-    loyaltyPoints: 150,
-    memberSince: 'January 2024',
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!isLoggedIn) {
+      router.push('/login');
+    }
+  }, [isLoggedIn, router]);
+
+  // Initialize profile data from user
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+      });
+    }
+  }, [user]);
+
+  // Fetch reservations for stats
+  useEffect(() => {
+    const fetchReservations = async () => {
+      if (!isLoggedIn) return;
+
+      try {
+        setLoading(true);
+        const response = await reservationApi.getMyReservations();
+        if (response.success && response.data) {
+          setReservations(response.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch reservations:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReservations();
+  }, [isLoggedIn]);
+
+  if (!isLoggedIn) {
+    return null;
+  }
+
+  // Calculate stats from real data
+  const now = new Date();
+  const userStats: UserStats = {
+    totalBookings: reservations.length,
+    upcomingBookings: reservations.filter(r => {
+      const resDate = new Date(r.reservationDate);
+      return resDate >= now && (r.status === 'CONFIRMED' || r.status === 'PENDING');
+    }).length,
+    completedBookings: reservations.filter(r => r.status === 'COMPLETED').length,
+    cancelledBookings: reservations.filter(r => r.status === 'CANCELLED').length,
+    loyaltyPoints: user?.loyaltyPoints || reservations.filter(r => r.status === 'COMPLETED').reduce((sum, r) => sum + r.loyaltyPointsEarned, 0),
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -64,33 +113,37 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage('');
+    setSaveError(false);
 
-    // Simulate API call
+    // Note: In a full implementation, this would call an API to update the profile
+    // For now, we just simulate success since no update profile endpoint exists
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     setIsSaving(false);
     setIsEditing(false);
     setSaveMessage('Profile updated successfully!');
 
-    // Clear success message after 3 seconds
     setTimeout(() => setSaveMessage(''), 3000);
   };
 
   const handlePasswordUpdate = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setSaveMessage('Passwords do not match!');
+      setSaveError(true);
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
       setSaveMessage('Password must be at least 8 characters!');
+      setSaveError(true);
       return;
     }
 
     setIsSaving(true);
     setSaveMessage('');
+    setSaveError(false);
 
-    // Simulate API call
+    // Note: In a full implementation, this would call an API to update the password
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     setIsSaving(false);
@@ -108,38 +161,78 @@ export default function ProfilePage() {
 
       {/* Main Content */}
       <main className="flex-1 lg:ml-64 py-8 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-5xl mx-auto">
-              {/* Header */}
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-[#333333]">My Account</h1>
-                <p className="text-[#333333] opacity-70 mt-1 text-sm">
-                  Welcome back, {profileData.firstName}! Manage your profile and reservations.
-                </p>
-                {saveMessage && (
-                  <div className="mt-3 bg-green-100 border border-green-400 text-green-700 px-3 py-2 rounded-lg text-sm">
-                    {saveMessage}
-                  </div>
-                )}
+        <div className="max-w-5xl mx-auto">
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-[#333333]">My Account</h1>
+            <p className="text-[#333333] opacity-70 mt-1 text-sm">
+              Welcome back, {profileData.firstName || 'User'}! Manage your profile and reservations.
+            </p>
+            {saveMessage && (
+              <div className={`mt-3 px-3 py-2 rounded-lg text-sm ${
+                saveError
+                  ? 'bg-red-100 border border-red-400 text-red-700'
+                  : 'bg-green-100 border border-green-400 text-green-700'
+              }`}>
+                {saveMessage}
               </div>
+            )}
+          </div>
 
-              <div className="space-y-4">
+          <div className="space-y-4">
             {/* Stats Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="bg-white rounded-lg shadow-md p-3 text-center">
-                <p className="text-2xl font-bold text-[#FF6B35]">{userStats.totalBookings}</p>
-                <p className="text-xs text-[#333333] opacity-70 mt-1">Total Bookings</p>
+                {loading ? (
+                  <div className="animate-pulse">
+                    <div className="h-8 bg-gray-200 rounded w-12 mx-auto mb-1"></div>
+                    <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-[#FF6B35]">{userStats.totalBookings}</p>
+                    <p className="text-xs text-[#333333] opacity-70 mt-1">Total Bookings</p>
+                  </>
+                )}
               </div>
               <div className="bg-white rounded-lg shadow-md p-3 text-center">
-                <p className="text-2xl font-bold text-green-600">{userStats.upcomingBookings}</p>
-                <p className="text-xs text-[#333333] opacity-70 mt-1">Upcoming</p>
+                {loading ? (
+                  <div className="animate-pulse">
+                    <div className="h-8 bg-gray-200 rounded w-12 mx-auto mb-1"></div>
+                    <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-green-600">{userStats.upcomingBookings}</p>
+                    <p className="text-xs text-[#333333] opacity-70 mt-1">Upcoming</p>
+                  </>
+                )}
               </div>
               <div className="bg-white rounded-lg shadow-md p-3 text-center">
-                <p className="text-2xl font-bold text-blue-600">{userStats.loyaltyPoints}</p>
-                <p className="text-xs text-[#333333] opacity-70 mt-1">Points</p>
+                {loading ? (
+                  <div className="animate-pulse">
+                    <div className="h-8 bg-gray-200 rounded w-12 mx-auto mb-1"></div>
+                    <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-blue-600">{userStats.loyaltyPoints}</p>
+                    <p className="text-xs text-[#333333] opacity-70 mt-1">Points</p>
+                  </>
+                )}
               </div>
               <div className="bg-white rounded-lg shadow-md p-3 text-center">
-                <p className="text-2xl font-bold text-purple-600">{userStats.completedBookings}</p>
-                <p className="text-xs text-[#333333] opacity-70 mt-1">Completed</p>
+                {loading ? (
+                  <div className="animate-pulse">
+                    <div className="h-8 bg-gray-200 rounded w-12 mx-auto mb-1"></div>
+                    <div className="h-3 bg-gray-200 rounded w-16 mx-auto"></div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-2xl font-bold text-purple-600">{userStats.completedBookings}</p>
+                    <p className="text-xs text-[#333333] opacity-70 mt-1">Completed</p>
+                  </>
+                )}
               </div>
             </div>
 
@@ -188,7 +281,7 @@ export default function ProfilePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
                     />
                   ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.firstName}</p>
+                    <p className="text-sm text-[#333333] py-1.5">{profileData.firstName || '-'}</p>
                   )}
                 </div>
 
@@ -203,7 +296,7 @@ export default function ProfilePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
                     />
                   ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.lastName}</p>
+                    <p className="text-sm text-[#333333] py-1.5">{profileData.lastName || '-'}</p>
                   )}
                 </div>
 
@@ -218,7 +311,7 @@ export default function ProfilePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
                     />
                   ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.email}</p>
+                    <p className="text-sm text-[#333333] py-1.5">{profileData.email || '-'}</p>
                   )}
                 </div>
 
@@ -233,55 +326,22 @@ export default function ProfilePage() {
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
                     />
                   ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.phone}</p>
+                    <p className="text-sm text-[#333333] py-1.5">{profileData.phone || '-'}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#333333] mb-1.5">Birthday</label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      name="birthday"
-                      value={profileData.birthday}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
-                    />
-                  ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{new Date(profileData.birthday).toLocaleDateString()}</p>
-                  )}
+                  <label className="block text-xs font-semibold text-[#333333] mb-1.5">Loyalty Tier</label>
+                  <p className="text-sm text-[#333333] py-1.5">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FF6B35] bg-opacity-10 text-[#FF6B35]">
+                      {user?.loyaltyTier || 'Bronze'}
+                    </span>
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-[#333333] mb-1.5">Dietary Preferences</label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="dietaryPreferences"
-                      value={profileData.dietaryPreferences.join(', ')}
-                      onChange={handleChange}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
-                      placeholder="Vegetarian, Gluten-Free, etc."
-                    />
-                  ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.dietaryPreferences.join(', ') || 'None specified'}</p>
-                  )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-semibold text-[#333333] mb-1.5">Special Requests / Notes</label>
-                  {isEditing ? (
-                    <textarea
-                      name="specialRequests"
-                      value={profileData.specialRequests}
-                      onChange={handleChange}
-                      rows={2}
-                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none resize-none"
-                      placeholder="Any special requirements or preferences..."
-                    />
-                  ) : (
-                    <p className="text-sm text-[#333333] py-1.5">{profileData.specialRequests || 'None'}</p>
-                  )}
+                  <label className="block text-xs font-semibold text-[#333333] mb-1.5">Loyalty Points</label>
+                  <p className="text-sm text-[#333333] py-1.5 font-bold">{userStats.loyaltyPoints} points</p>
                 </div>
               </div>
             </div>
@@ -293,7 +353,7 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between py-2 border-b border-gray-200">
                   <div>
                     <p className="text-sm font-semibold text-[#333333]">Password</p>
-                    <p className="text-xs text-[#333333] opacity-70">Last changed 30 days ago</p>
+                    <p className="text-xs text-[#333333] opacity-70">Keep your account secure</p>
                   </div>
                   <button
                     onClick={() => setIsChangingPassword(!isChangingPassword)}

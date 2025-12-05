@@ -85,11 +85,17 @@ export default function RegisterPage() {
 
     setIsSubmitting(true);
 
-    const fullName = `${formData.firstName} ${formData.lastName}`;
-    const success = await register(fullName, formData.email, formData.password);
+    const result = await register({
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password,
+      confirmPassword: formData.confirmPassword,
+    });
 
-    if (!success) {
-      setErrors({ general: 'Registration failed. Please try again.' });
+    if (!result.success) {
+      setErrors({ general: result.message || 'Registration failed. Please try again.' });
       setIsSubmitting(false);
     }
   };
@@ -108,6 +114,12 @@ export default function RegisterPage() {
         {/* Registration Form */}
         <div className="bg-white rounded-lg shadow-xl p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {errors.general && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">
+                {errors.general}
+              </div>
+            )}
+
             {/* Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
