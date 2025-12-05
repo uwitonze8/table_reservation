@@ -91,7 +91,7 @@ class NotificationService {
       Please arrive 10 minutes early.
 
       If you need to modify or cancel, please contact us at:
-      📞 (555) 000-0000
+      📞 +250788587420
 
       Best regards,
       QuickTable Restaurant Team

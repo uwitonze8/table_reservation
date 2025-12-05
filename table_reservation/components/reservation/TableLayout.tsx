@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { tableApi, Table as ApiTable } from '@/lib/api';
 
 export interface Table {
   id: string;
@@ -20,61 +21,78 @@ interface TableLayoutProps {
   selectedTableId?: string;
 }
 
-// Mock restaurant layout
-const restaurantTables: Table[] = [
-  // Window Tables (Left side)
-  { id: 'T1', number: 1, seats: 2, position: { x: 5, y: 10 }, shape: 'square', status: 'available', location: 'window' },
-  { id: 'T2', number: 2, seats: 2, position: { x: 5, y: 30 }, shape: 'square', status: 'available', location: 'window' },
-  { id: 'T3', number: 3, seats: 4, position: { x: 5, y: 50 }, shape: 'rectangle', status: 'reserved', location: 'window' },
-  { id: 'T4', number: 4, seats: 4, position: { x: 5, y: 70 }, shape: 'rectangle', status: 'available', location: 'window' },
+// Position mapping for table numbers
+const getTablePosition = (tableNumber: number): { x: number; y: number } => {
+  const positions: Record<number, { x: number; y: number }> = {
+    1: { x: 5, y: 10 }, 2: { x: 5, y: 30 }, 3: { x: 5, y: 50 }, 4: { x: 5, y: 70 },
+    5: { x: 25, y: 15 }, 6: { x: 25, y: 40 }, 7: { x: 25, y: 65 },
+    8: { x: 45, y: 10 }, 9: { x: 45, y: 30 }, 10: { x: 45, y: 55 }, 11: { x: 45, y: 78 },
+    12: { x: 70, y: 10 }, 13: { x: 70, y: 30 }, 14: { x: 70, y: 50 }, 15: { x: 70, y: 70 },
+    16: { x: 15, y: 88 }, 17: { x: 35, y: 88 }, 18: { x: 55, y: 88 },
+    19: { x: 25, y: 2 }, 20: { x: 45, y: 2 },
+  };
+  return positions[tableNumber] || { x: 50, y: 50 };
+};
 
-  // Center Tables
-  { id: 'T5', number: 5, seats: 4, position: { x: 25, y: 15 }, shape: 'round', status: 'available', location: 'center' },
-  { id: 'T6', number: 6, seats: 6, position: { x: 25, y: 40 }, shape: 'round', status: 'occupied', location: 'center' },
-  { id: 'T7', number: 7, seats: 4, position: { x: 25, y: 65 }, shape: 'round', status: 'available', location: 'center' },
-
-  { id: 'T8', number: 8, seats: 2, position: { x: 45, y: 10 }, shape: 'square', status: 'available', location: 'center' },
-  { id: 'T9', number: 9, seats: 4, position: { x: 45, y: 30 }, shape: 'rectangle', status: 'available', location: 'center' },
-  { id: 'T10', number: 10, seats: 6, position: { x: 45, y: 55 }, shape: 'round', status: 'available', location: 'center' },
-  { id: 'T11', number: 11, seats: 2, position: { x: 45, y: 78 }, shape: 'square', status: 'reserved', location: 'center' },
-
-  // Window Tables (Right side)
-  { id: 'T12', number: 12, seats: 2, position: { x: 70, y: 10 }, shape: 'square', status: 'available', location: 'window' },
-  { id: 'T13', number: 13, seats: 4, position: { x: 70, y: 30 }, shape: 'rectangle', status: 'available', location: 'window' },
-  { id: 'T14', number: 14, seats: 2, position: { x: 70, y: 50 }, shape: 'square', status: 'occupied', location: 'window' },
-  { id: 'T15', number: 15, seats: 4, position: { x: 70, y: 70 }, shape: 'rectangle', status: 'available', location: 'window' },
-
-  // Patio Tables (Bottom)
-  { id: 'T16', number: 16, seats: 4, position: { x: 15, y: 88 }, shape: 'round', status: 'available', location: 'patio' },
-  { id: 'T17', number: 17, seats: 4, position: { x: 35, y: 88 }, shape: 'round', status: 'available', location: 'patio' },
-  { id: 'T18', number: 18, seats: 6, position: { x: 55, y: 88 }, shape: 'round', status: 'available', location: 'patio' },
-
-  // Bar Tables (Top)
-  { id: 'T19', number: 19, seats: 2, position: { x: 25, y: 2 }, shape: 'square', status: 'available', location: 'bar' },
-  { id: 'T20', number: 20, seats: 2, position: { x: 45, y: 2 }, shape: 'square', status: 'reserved', location: 'bar' },
-];
+// Map API table to component table format
+const mapApiTable = (apiTable: ApiTable): Table => {
+  return {
+    id: String(apiTable.id), // Keep as string for component but it's the real database ID
+    number: apiTable.tableNumber,
+    seats: apiTable.capacity,
+    position: apiTable.positionX && apiTable.positionY
+      ? { x: apiTable.positionX, y: apiTable.positionY }
+      : getTablePosition(apiTable.tableNumber),
+    shape: apiTable.shape.toLowerCase() as 'square' | 'round' | 'rectangle',
+    status: apiTable.status.toLowerCase() as 'available' | 'reserved' | 'occupied',
+    location: apiTable.location.toLowerCase() as 'window' | 'center' | 'patio' | 'bar',
+  };
+};
 
 export default function TableLayout({ selectedDate, selectedTime, selectedGuests, onTableSelect, selectedTableId }: TableLayoutProps) {
   const [hoveredTable, setHoveredTable] = useState<string | null>(null);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // Filter tables based on guest count - show tables matching the guest number
+  // Fetch tables from API
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        setLoading(true);
+        const response = await tableApi.getAll();
+        if (response.success && response.data) {
+          const mappedTables = response.data.map(mapApiTable);
+          setTables(mappedTables);
+        } else {
+          setError('Failed to load tables');
+        }
+      } catch (err) {
+        setError('Failed to load tables');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTables();
+  }, []);
+
+  // Filter tables based on guest count
   const getFilteredTables = () => {
-    if (!selectedGuests) return restaurantTables;
+    if (!selectedGuests) return tables;
 
     // Find the minimum table size that can accommodate the guests
-    // Available table sizes: 2, 4, 6
     let targetSeats;
     if (selectedGuests <= 2) targetSeats = 2;
     else if (selectedGuests <= 4) targetSeats = 4;
-    else targetSeats = 6; // 5, 6, 7, 8, 9, 10+ guests
+    else targetSeats = 6;
 
-    // Show only tables with the target seat count
-    return restaurantTables.filter(table => table.seats === targetSeats);
+    return tables.filter(table => table.seats >= targetSeats);
   };
 
-  const tables = getFilteredTables();
+  const filteredTables = getFilteredTables();
 
-  // Get table status (simplified since we're only showing suitable tables)
+  // Get table status
   const getTableStatus = (table: Table) => {
     if (table.status === 'occupied') return 'occupied';
     if (table.status === 'reserved') return 'reserved';
@@ -108,6 +126,26 @@ export default function TableLayout({ selectedDate, selectedTime, selectedGuests
     const status = getTableStatus(table);
     return status === 'available';
   };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg p-4">
+        <h3 className="text-lg font-bold text-[#333333] mb-4">Select Your Table</h3>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin w-8 h-8 border-4 border-[#FF6B35] border-t-transparent rounded-full"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg p-4">
+        <h3 className="text-lg font-bold text-[#333333] mb-4">Select Your Table</h3>
+        <div className="text-center text-red-500 py-8">{error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg p-4">
@@ -175,7 +213,7 @@ export default function TableLayout({ selectedDate, selectedTime, selectedGuests
 
         {/* Tables */}
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-          {tables.map((table) => {
+          {filteredTables.map((table) => {
             const size = getTableSize(table.shape, table.seats);
             const color = getTableColor(table);
             const status = getTableStatus(table);
@@ -293,7 +331,7 @@ export default function TableLayout({ selectedDate, selectedTime, selectedGuests
       {selectedTableId && (
         <div className="mt-4 bg-[#FF6B35] bg-opacity-10 border-2 border-[#FF6B35] rounded-lg p-3">
           {(() => {
-            const selectedTable = tables.find(t => t.id === selectedTableId);
+            const selectedTable = filteredTables.find(t => t.id === selectedTableId);
             if (!selectedTable) return null;
             return (
               <div className="flex items-center justify-between">

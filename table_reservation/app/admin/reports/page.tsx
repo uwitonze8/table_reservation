@@ -1,107 +1,356 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { adminApi, ReportData } from '@/lib/api';
 
 export default function AdminReportsPage() {
+  const [reportData, setReportData] = useState<ReportData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [dateRange, setDateRange] = useState('thisMonth');
-  const [reportType, setReportType] = useState('summary');
 
-  // Mock data - Comprehensive reporting data
-  const reportData = {
-    summary: {
-      totalReservations: 342,
-      totalRevenue: 28450,
-      averagePartySize: 3.2,
-      cancellationRate: 8.5,
-      noShowRate: 3.2,
-      averageRevenuePerReservation: 83.19,
-      totalGuests: 1094,
-      tableUtilization: 72,
-    },
-    topTables: [
-      { table: 'Table 5', bookings: 45, revenue: 3200, avgPartySize: 4 },
-      { table: 'Table 12', bookings: 42, revenue: 2980, avgPartySize: 2 },
-      { table: 'Table 8', bookings: 38, revenue: 2750, avgPartySize: 4 },
-      { table: 'Table 10', bookings: 35, revenue: 2450, avgPartySize: 6 },
-      { table: 'Table 3', bookings: 32, revenue: 2100, avgPartySize: 2 },
-    ],
-    peakHours: [
-      { time: '6:00 PM', bookings: 65, revenue: 5200 },
-      { time: '7:00 PM', bookings: 78, revenue: 6800 },
-      { time: '8:00 PM', bookings: 95, revenue: 8200 },
-      { time: '9:00 PM', bookings: 54, revenue: 4500 },
-    ],
-    customerSegments: [
-      { type: 'New Customers', count: 145, percentage: 42, avgSpending: 78 },
-      { type: 'Returning Customers', count: 197, percentage: 58, avgSpending: 87 },
-    ],
-    weeklyTrend: [
-      { day: 'Monday', reservations: 38, revenue: 3200 },
-      { day: 'Tuesday', reservations: 42, revenue: 3500 },
-      { day: 'Wednesday', reservations: 45, revenue: 3750 },
-      { day: 'Thursday', reservations: 52, revenue: 4200 },
-      { day: 'Friday', reservations: 78, revenue: 6800 },
-      { day: 'Saturday', reservations: 87, revenue: 7000 },
-    ],
-    topCustomers: [
-      { name: 'Michael Brown', visits: 8, spent: 720, tierLevel: 'Platinum' },
-      { name: 'John Smith', visits: 6, spent: 540, tierLevel: 'Gold' },
-      { name: 'Sarah Johnson', visits: 5, spent: 450, tierLevel: 'Gold' },
-      { name: 'Emily Davis', visits: 4, spent: 360, tierLevel: 'Silver' },
-      { name: 'David Wilson', visits: 3, spent: 270, tierLevel: 'Silver' },
-    ],
-  };
+  useEffect(() => {
+    fetchReportData();
+  }, [dateRange]);
 
-  const handlePrintReport = () => {
-    window.print();
-  };
+  const fetchReportData = async () => {
+    try {
+      setLoading(true);
+      setError('');
 
-  const handleExportCSV = () => {
-    const csvData = `
-Restaurant Management Report
-Report Type,${reportType}
-Date Range,${dateRange}
-Generated,${new Date().toLocaleString()}
+      // Fetch dashboard stats and reservations to generate report data
+      const [statsResponse, reservationsResponse] = await Promise.all([
+        adminApi.getDashboardStats(),
+        adminApi.getAllReservations(0, 100)
+      ]);
 
-SUMMARY METRICS
-Total Reservations,${reportData.summary.totalReservations}
-Total Revenue,$${reportData.summary.totalRevenue}
-Average Party Size,${reportData.summary.averagePartySize} guests
-Cancellation Rate,${reportData.summary.cancellationRate}%
-No-Show Rate,${reportData.summary.noShowRate}%
-Avg Revenue per Reservation,$${reportData.summary.averageRevenuePerReservation}
-Total Guests,${reportData.summary.totalGuests}
-Table Utilization,${reportData.summary.tableUtilization}%
+      if (statsResponse.success && statsResponse.data) {
+        const stats = statsResponse.data;
+        const reservations = reservationsResponse.success && reservationsResponse.data
+          ? reservationsResponse.data.content || []
+          : [];
 
-TOP PERFORMING TABLES
-Table,Bookings,Revenue,Avg Party Size
-${reportData.topTables.map(t => `${t.table},${t.bookings},$${t.revenue},${t.avgPartySize}`).join('\n')}
+        // Calculate report data from dashboard stats
+        const totalGuests = stats.totalGuestsExpected + stats.totalGuestsServed;
+        const totalReservations = stats.totalReservations || 1;
+        const avgPartySize = totalGuests / totalReservations || 0;
+        const cancellationRate = totalReservations > 0
+          ? (stats.cancelledReservations / totalReservations) * 100
+          : 0;
 
-PEAK HOURS
-Time,Bookings,Revenue
-${reportData.peakHours.map(h => `${h.time},${h.bookings},$${h.revenue}`).join('\n')}
+        // Generate top tables data from reservations
+        const tableBookings: Record<number, { count: number; guests: number }> = {};
+        reservations.forEach(r => {
+          if (!tableBookings[r.tableNumber]) {
+            tableBookings[r.tableNumber] = { count: 0, guests: 0 };
+          }
+          tableBookings[r.tableNumber].count++;
+          tableBookings[r.tableNumber].guests += r.numberOfGuests;
+        });
 
-CUSTOMER SEGMENTS
-Segment,Count,Percentage,Avg Spending
-${reportData.customerSegments.map(s => `${s.type},${s.count},${s.percentage}%,$${s.avgSpending}`).join('\n')}
+        const topTables = Object.entries(tableBookings)
+          .map(([tableNum, data]) => ({
+            tableNumber: parseInt(tableNum),
+            bookings: data.count,
+            avgGuests: data.count > 0 ? data.guests / data.count : 0
+          }))
+          .sort((a, b) => b.bookings - a.bookings)
+          .slice(0, 5);
 
-TOP CUSTOMERS
-Customer,Visits,Total Spent,Tier Level
-${reportData.topCustomers.map(c => `${c.name},${c.visits},$${c.spent},${c.tierLevel}`).join('\n')}
-    `.trim();
+        // Generate peak hours from reservations
+        const hourBookings: Record<string, number> = {};
+        reservations.forEach(r => {
+          const hour = r.reservationTime?.split(':')[0] || '12';
+          const hourInt = parseInt(hour);
+          const hourLabel = hourInt >= 12
+            ? `${hourInt === 12 ? 12 : hourInt - 12}:00 PM`
+            : `${hourInt === 0 ? 12 : hourInt}:00 AM`;
+          hourBookings[hourLabel] = (hourBookings[hourLabel] || 0) + 1;
+        });
 
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `restaurant-report-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
+        const peakHours = Object.entries(hourBookings)
+          .map(([hour, bookings]) => ({ hour, bookings }))
+          .sort((a, b) => b.bookings - a.bookings)
+          .slice(0, 6);
+
+        // Generate weekday breakdown
+        const weekdayBookings: Record<string, number> = {};
+        const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        reservations.forEach(r => {
+          if (r.reservationDate) {
+            const date = new Date(r.reservationDate);
+            const dayName = dayNames[date.getDay()];
+            weekdayBookings[dayName] = (weekdayBookings[dayName] || 0) + 1;
+          }
+        });
+
+        const weekdayBreakdown = dayNames
+          .map(dayName => ({ dayName, bookings: weekdayBookings[dayName] || 0 }))
+          .sort((a, b) => b.bookings - a.bookings);
+
+        const generatedReport: ReportData = {
+          summary: {
+            totalReservations: stats.totalReservations,
+            confirmedReservations: stats.confirmedReservations,
+            completedReservations: stats.completedReservations,
+            cancelledReservations: stats.cancelledReservations,
+            totalGuests,
+            averagePartySize: avgPartySize,
+            tableUtilization: stats.occupancyRate,
+            cancellationRate
+          },
+          topTables,
+          peakHours,
+          customerStats: {
+            newCustomers: stats.newCustomersToday,
+            returningCustomers: Math.max(0, stats.totalCustomers - stats.newCustomersToday),
+            totalUniqueCustomers: stats.totalCustomers
+          },
+          weekdayBreakdown
+        };
+
+        setReportData(generatedReport);
+      } else {
+        setError(statsResponse.message || 'Failed to load reports');
+      }
+    } catch (err) {
+      console.error('Failed to fetch reports:', err);
+      setError('Failed to load reports. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleExportPDF = () => {
-    alert('PDF export: This would generate a professionally formatted PDF report using a library like jsPDF or Puppeteer');
+    if (!reportData) return;
+
+    const dateRangeLabel = dateRange === 'thisMonth' ? 'This Month' : dateRange === 'lastMonth' ? 'Last Month' : dateRange === 'thisWeek' ? 'This Week' : 'Last 7 Days';
+
+    // Create an iframe for printing in the same tab
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QuickTable Report - ${dateRangeLabel}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #FF6B35; padding-bottom: 20px; }
+          .header h1 { color: #FF6B35; font-size: 28px; margin-bottom: 5px; }
+          .header p { color: #666; font-size: 14px; }
+          .section { margin-bottom: 25px; }
+          .section h2 { color: #333; font-size: 18px; margin-bottom: 15px; border-left: 4px solid #FF6B35; padding-left: 10px; }
+          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+          .stat-card { background: #f8f4f0; padding: 15px; border-radius: 8px; text-align: center; }
+          .stat-card .value { font-size: 24px; font-weight: bold; color: #FF6B35; }
+          .stat-card .label { font-size: 12px; color: #666; margin-top: 5px; }
+          .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+          .status-card { padding: 15px; border-radius: 8px; text-align: center; color: white; }
+          .status-card.confirmed { background: linear-gradient(135deg, #22c55e, #16a34a); }
+          .status-card.completed { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+          .status-card.cancelled { background: linear-gradient(135deg, #ef4444, #dc2626); }
+          .status-card.rate { background: linear-gradient(135deg, #eab308, #ca8a04); }
+          .status-card .value { font-size: 24px; font-weight: bold; }
+          .status-card .label { font-size: 12px; opacity: 0.9; }
+          .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+          th { background: #f8f4f0; font-weight: 600; }
+          .footer { margin-top: 30px; text-align: center; color: #999; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Quick Table</h1>
+          <p>Restaurant Performance Report</p>
+          <p style="margin-top: 10px;"><strong>Period:</strong> ${dateRangeLabel} | <strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        </div>
+
+        <div class="section">
+          <h2>Summary Statistics</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="value">${reportData.summary.totalReservations}</div>
+              <div class="label">Total Reservations</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #3b82f6;">${reportData.summary.totalGuests}</div>
+              <div class="label">Total Guests</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #8b5cf6;">${reportData.summary.averagePartySize.toFixed(1)}</div>
+              <div class="label">Avg Party Size</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #22c55e;">${reportData.summary.tableUtilization}%</div>
+              <div class="label">Table Utilization</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Reservation Status</h2>
+          <div class="status-grid">
+            <div class="status-card confirmed">
+              <div class="value">${reportData.summary.confirmedReservations}</div>
+              <div class="label">Confirmed</div>
+            </div>
+            <div class="status-card completed">
+              <div class="value">${reportData.summary.completedReservations}</div>
+              <div class="label">Completed</div>
+            </div>
+            <div class="status-card cancelled">
+              <div class="value">${reportData.summary.cancelledReservations}</div>
+              <div class="label">Cancelled</div>
+            </div>
+            <div class="status-card rate">
+              <div class="value">${reportData.summary.cancellationRate.toFixed(1)}%</div>
+              <div class="label">Cancellation Rate</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section two-col">
+          <div>
+            <h2>Top Tables</h2>
+            <table>
+              <thead>
+                <tr><th>Rank</th><th>Table</th><th>Bookings</th><th>Avg Guests</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.topTables.map((t, i) => `
+                  <tr>
+                    <td>#${i + 1}</td>
+                    <td>Table ${t.tableNumber}</td>
+                    <td>${t.bookings}</td>
+                    <td>${t.avgGuests.toFixed(1)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Peak Hours</h2>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Bookings</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.peakHours.map(h => `
+                  <tr>
+                    <td>${h.hour}</td>
+                    <td>${h.bookings}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section two-col">
+          <div>
+            <h2>Customer Statistics</h2>
+            <table>
+              <tbody>
+                <tr><td>New Customers</td><td><strong>${reportData.customerStats.newCustomers}</strong></td></tr>
+                <tr><td>Returning Customers</td><td><strong>${reportData.customerStats.returningCustomers}</strong></td></tr>
+                <tr><td>Total Unique Customers</td><td><strong>${reportData.customerStats.totalUniqueCustomers}</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Busiest Days</h2>
+            <table>
+              <thead>
+                <tr><th>Day</th><th>Bookings</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.weekdayBreakdown.slice(0, 5).map(d => `
+                  <tr>
+                    <td>${d.dayName}</td>
+                    <td>${d.bookings}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Generated by Quick Table Restaurant Management System</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
+    iframeDoc.close();
+
+    // Use setTimeout to ensure the content is fully rendered before printing
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Remove iframe after printing
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-[#F8F4F0]">
+        <AdminSidebar />
+        <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-sm text-[#333333] opacity-70">Loading reports...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen bg-[#F8F4F0]">
+        <AdminSidebar />
+        <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+            <button
+              onClick={fetchReportData}
+              className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!reportData) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8F4F0]">
@@ -111,279 +360,184 @@ ${reportData.topCustomers.map(c => `${c.name},${c.visits},$${c.spent},${c.tierLe
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-6">
-            <h1 className="text-2xl font-bold text-[#333333] mb-1">Business Reports & Analytics</h1>
-            <p className="text-sm text-[#333333] opacity-70">
-              Comprehensive insights for restaurant performance and decision making
-            </p>
-          </div>
-
-          {/* Filters & Export */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div className="flex justify-between items-start">
               <div>
-                <label className="block text-xs font-semibold text-[#333333] mb-2">Date Range</label>
+                <h1 className="text-2xl font-bold text-[#333333] mb-1">Reports & Analytics</h1>
+                <p className="text-sm text-[#333333] opacity-70">
+                  View restaurant performance metrics and insights
+                </p>
+              </div>
+              <div className="flex gap-2">
                 <select
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                 >
-                  <option value="today">Today</option>
                   <option value="thisWeek">This Week</option>
+                  <option value="last7Days">Last 7 Days</option>
                   <option value="thisMonth">This Month</option>
                   <option value="lastMonth">Last Month</option>
-                  <option value="thisQuarter">This Quarter</option>
-                  <option value="thisYear">This Year</option>
-                  <option value="custom">Custom Range</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-[#333333] mb-2">Report Type</label>
-                <select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                <button
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold cursor-pointer"
                 >
-                  <option value="summary">Executive Summary</option>
-                  <option value="detailed">Detailed Analytics</option>
-                  <option value="financial">Financial Report</option>
-                  <option value="customer">Customer Insights</option>
-                  <option value="operational">Operational Metrics</option>
-                </select>
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-xs font-semibold text-[#333333] mb-2">Export Options</label>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handlePrintReport}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                    Print
-                  </button>
-                  <button
-                    onClick={handleExportCSV}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    CSV
-                  </button>
-                  <button
-                    onClick={handleExportPDF}
-                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                    PDF
-                  </button>
-                </div>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  Export PDF
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Key Metrics Grid */}
+          {/* Summary Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-lg shadow-md p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-[#333333] opacity-70">Total Reservations</p>
-                <div className="w-6 h-6 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-[#333333] mb-0.5">{reportData.summary.totalReservations}</p>
-              <p className="text-xs text-green-600">↑ 12% vs last period</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Total Reservations</p>
+              <p className="text-2xl font-bold text-[#333333]">{reportData.summary.totalReservations}</p>
             </div>
-
             <div className="bg-white rounded-lg shadow-md p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-[#333333] opacity-70">Total Revenue</p>
-                <div className="w-6 h-6 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-[#333333] mb-0.5">${reportData.summary.totalRevenue.toLocaleString()}</p>
-              <p className="text-xs text-green-600">↑ 8% vs last period</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Total Guests</p>
+              <p className="text-2xl font-bold text-blue-600">{reportData.summary.totalGuests}</p>
             </div>
-
             <div className="bg-white rounded-lg shadow-md p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-[#333333] opacity-70">Total Guests</p>
-                <div className="w-6 h-6 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-[#333333] mb-0.5">{reportData.summary.totalGuests}</p>
-              <p className="text-xs text-[#333333] opacity-70">{reportData.summary.averagePartySize} avg party size</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Avg Party Size</p>
+              <p className="text-2xl font-bold text-purple-600">{reportData.summary.averagePartySize.toFixed(1)}</p>
             </div>
-
             <div className="bg-white rounded-lg shadow-md p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs text-[#333333] opacity-70">Table Utilization</p>
-                <div className="w-6 h-6 bg-[#FF6B35] bg-opacity-20 rounded-lg flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-              </div>
-              <p className="text-2xl font-bold text-[#333333] mb-0.5">{reportData.summary.tableUtilization}%</p>
-              <p className="text-xs text-green-600">↑ 5% vs last period</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Table Utilization</p>
+              <p className="text-2xl font-bold text-green-600">{reportData.summary.tableUtilization}%</p>
             </div>
           </div>
 
-          {/* Secondary Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {/* Reservation Status */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-md p-3 text-white">
+              <p className="text-white opacity-90 mb-0.5 text-xs">Confirmed</p>
+              <p className="text-2xl font-bold">{reportData.summary.confirmedReservations}</p>
+            </div>
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-md p-3 text-white">
+              <p className="text-white opacity-90 mb-0.5 text-xs">Completed</p>
+              <p className="text-2xl font-bold">{reportData.summary.completedReservations}</p>
+            </div>
             <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-md p-3 text-white">
-              <p className="text-white opacity-90 mb-1 text-xs">Cancellation Rate</p>
-              <p className="text-2xl font-bold">{reportData.summary.cancellationRate}%</p>
-              <p className="text-xs opacity-80">↓ 2% improvement</p>
+              <p className="text-white opacity-90 mb-0.5 text-xs">Cancelled</p>
+              <p className="text-2xl font-bold">{reportData.summary.cancelledReservations}</p>
             </div>
-
-            <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md p-3 text-white">
-              <p className="text-white opacity-90 mb-1 text-xs">No-Show Rate</p>
-              <p className="text-2xl font-bold">{reportData.summary.noShowRate}%</p>
-              <p className="text-xs opacity-80">↓ 1% improvement</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-[#FF6B35] to-[#e55a2b] rounded-lg shadow-md p-3 text-white">
-              <p className="text-white opacity-90 mb-1 text-xs">Avg Revenue/Booking</p>
-              <p className="text-2xl font-bold">${reportData.summary.averageRevenuePerReservation}</p>
-              <p className="text-xs opacity-80">↑ 4% increase</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md p-3 text-white">
-              <p className="text-white opacity-90 mb-1 text-xs">Returning Customers</p>
-              <p className="text-2xl font-bold">{reportData.customerSegments[1].percentage}%</p>
-              <p className="text-xs opacity-80">Strong loyalty</p>
+            <div className="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg shadow-md p-3 text-white">
+              <p className="text-white opacity-90 mb-0.5 text-xs">Cancellation Rate</p>
+              <p className="text-2xl font-bold">{reportData.summary.cancellationRate.toFixed(1)}%</p>
             </div>
           </div>
 
-          {/* Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          {/* Top Tables and Peak Hours */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Top Tables */}
             <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-xl font-bold text-[#333333] mb-4">Top Performing Tables</h3>
-              <div className="space-y-2.5">
-                {reportData.topTables.map((table, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 bg-[#FF6B35] text-white rounded-full flex items-center justify-center text-xs font-bold">
-                        {index + 1}
+              <h2 className="text-xl font-bold text-[#333333] mb-4">Top Tables</h2>
+              {reportData.topTables.length === 0 ? (
+                <p className="text-sm text-[#333333] opacity-70 text-center py-4">No data available</p>
+              ) : (
+                <div className="space-y-3">
+                  {reportData.topTables.map((table, index) => (
+                    <div key={index} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                          index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-gray-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <span className="font-semibold text-[#333333] text-sm">Table {table.tableNumber}</span>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[#333333]">{table.table}</p>
-                        <p className="text-xs text-[#333333] opacity-70">{table.bookings} bookings • Avg {table.avgPartySize} guests</p>
+                      <div className="text-right">
+                        <p className="font-bold text-[#FF6B35] text-sm">{table.bookings} bookings</p>
+                        <p className="text-xs text-[#333333] opacity-70">{table.avgGuests.toFixed(1)} avg guests</p>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-green-600">${table.revenue.toLocaleString()}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Peak Hours */}
             <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-xl font-bold text-[#333333] mb-4">Peak Booking Hours</h3>
-              <div className="space-y-3">
-                {reportData.peakHours.map((hour, index) => (
-                  <div key={index}>
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-semibold text-[#333333]">{hour.time}</span>
-                      <span className="text-xs text-[#FF6B35] font-bold">{hour.bookings} bookings • ${hour.revenue.toLocaleString()}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                      <div
-                        className="bg-[#FF6B35] h-1.5 rounded-full transition-all"
-                        style={{ width: `${(hour.bookings / 100) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <h2 className="text-xl font-bold text-[#333333] mb-4">Peak Hours</h2>
+              {reportData.peakHours.length === 0 ? (
+                <p className="text-sm text-[#333333] opacity-70 text-center py-4">No data available</p>
+              ) : (
+                <div className="space-y-3">
+                  {reportData.peakHours.map((hour, index) => {
+                    const maxBookings = Math.max(...reportData.peakHours.map(h => h.bookings));
+                    const percentage = maxBookings > 0 ? (hour.bookings / maxBookings) * 100 : 0;
+                    return (
+                      <div key={index}>
+                        <div className="flex justify-between mb-1">
+                          <span className="text-sm font-semibold text-[#333333]">{hour.hour}</span>
+                          <span className="text-xs text-[#FF6B35] font-bold">{hour.bookings} bookings</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-[#FF6B35] h-2 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Weekly Trend */}
-          <div className="bg-white rounded-lg shadow-md p-4 mb-4">
-            <h3 className="text-xl font-bold text-[#333333] mb-4">Weekly Performance Trend</h3>
-            <div className="overflow-x-auto">
-              <div className="flex gap-3 min-w-max">
-                {reportData.weeklyTrend.map((day, index) => (
-                  <div key={index} className="flex-1 min-w-[120px]">
-                    <div className="bg-[#F8F4F0] rounded-lg p-3 text-center">
-                      <p className="text-xs font-semibold text-[#333333] mb-2">{day.day}</p>
-                      <div className="mb-2">
-                        <p className="text-xl font-bold text-[#FF6B35]">{day.reservations}</p>
-                        <p className="text-xs text-[#333333] opacity-70">reservations</p>
-                      </div>
-                      <div className="pt-2 border-t border-gray-300">
-                        <p className="text-sm font-bold text-green-600">${day.revenue.toLocaleString()}</p>
-                        <p className="text-xs text-[#333333] opacity-70">revenue</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Customer Segments */}
+          {/* Customer Stats and Weekday Breakdown */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Customer Stats */}
             <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-xl font-bold text-[#333333] mb-4">Customer Segments</h3>
-              <div className="space-y-3">
-                {reportData.customerSegments.map((segment, index) => (
-                  <div key={index} className="border-2 border-gray-200 rounded-lg p-3">
-                    <div className="flex justify-between items-center mb-2">
-                      <h4 className="text-sm font-semibold text-[#333333]">{segment.type}</h4>
-                      <span className="text-2xl font-bold text-[#FF6B35]">{segment.percentage}%</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-xl font-bold text-[#333333]">{segment.count}</p>
-                        <p className="text-xs text-[#333333] opacity-70">customers</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-green-600">${segment.avgSpending}</p>
-                        <p className="text-xs text-[#333333] opacity-70">avg spending</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <h2 className="text-xl font-bold text-[#333333] mb-4">Customer Statistics</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center p-3 bg-[#F8F4F0] rounded-lg">
+                  <p className="text-2xl font-bold text-[#FF6B35]">{reportData.customerStats.newCustomers}</p>
+                  <p className="text-xs text-[#333333] opacity-70">New Customers</p>
+                </div>
+                <div className="text-center p-3 bg-[#F8F4F0] rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">{reportData.customerStats.returningCustomers}</p>
+                  <p className="text-xs text-[#333333] opacity-70">Returning Customers</p>
+                </div>
+                <div className="text-center p-3 bg-[#F8F4F0] rounded-lg col-span-2">
+                  <p className="text-2xl font-bold text-green-600">{reportData.customerStats.totalUniqueCustomers}</p>
+                  <p className="text-xs text-[#333333] opacity-70">Total Unique Customers</p>
+                </div>
               </div>
             </div>
 
-            {/* Top Customers */}
+            {/* Weekday Breakdown */}
             <div className="bg-white rounded-lg shadow-md p-4">
-              <h3 className="text-xl font-bold text-[#333333] mb-4">Top Customers (VIP)</h3>
-              <div className="space-y-2">
-                {reportData.topCustomers.map((customer, index) => (
-                  <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-xs font-bold">
-                        {index + 1}
+              <h2 className="text-xl font-bold text-[#333333] mb-4">Busiest Days</h2>
+              {reportData.weekdayBreakdown.length === 0 ? (
+                <p className="text-sm text-[#333333] opacity-70 text-center py-4">No data available</p>
+              ) : (
+                <div className="space-y-2">
+                  {reportData.weekdayBreakdown.slice(0, 5).map((day, index) => {
+                    const maxBookings = Math.max(...reportData.weekdayBreakdown.map(d => d.bookings));
+                    const percentage = maxBookings > 0 ? (day.bookings / maxBookings) * 100 : 0;
+                    return (
+                      <div key={index}>
+                        <div className="flex justify-between mb-1">
+                          <span className="text-sm font-semibold text-[#333333]">{day.dayName}</span>
+                          <span className="text-xs text-[#FF6B35] font-bold">{day.bookings} bookings</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className="bg-[#FF6B35] h-1.5 rounded-full"
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-[#333333]">{customer.name}</p>
-                        <p className="text-xs text-[#333333] opacity-70">{customer.visits} visits • {customer.tierLevel}</p>
-                      </div>
-                    </div>
-                    <p className="text-sm font-bold text-green-600">${customer.spent}</p>
-                  </div>
-                ))}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

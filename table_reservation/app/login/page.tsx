@@ -29,10 +29,10 @@ export default function LoginPage() {
     setError('');
     setIsSubmitting(true);
 
-    const success = await login(formData.email, formData.password, 'user');
+    const result = await login(formData.email, formData.password);
 
-    if (!success) {
-      setError('Invalid email or password');
+    if (!result.success) {
+      setError(result.message || 'Invalid email or password');
       setIsSubmitting(false);
     }
   };

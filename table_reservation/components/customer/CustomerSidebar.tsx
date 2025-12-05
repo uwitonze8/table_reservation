@@ -8,9 +8,14 @@ export default function CustomerSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
 
-  const userStats = {
-    memberSince: 'January 2024',
+  // Format the member since date from user's createdAt
+  const formatMemberSince = (dateString?: string): string => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   };
+
+  const memberSince = formatMemberSince(user?.createdAt);
 
   const firstName = user?.name?.split(' ')[0] || 'User';
   const lastName = user?.name?.split(' ')[1] || '';
@@ -29,7 +34,7 @@ export default function CustomerSidebar() {
           <h2 className="text-base font-bold text-[#333333]">
             {user?.name}
           </h2>
-          <p className="text-xs text-[#333333] opacity-70">Member since {userStats.memberSince}</p>
+          <p className="text-xs text-[#333333] opacity-70">Member since {memberSince}</p>
         </div>
 
         {/* Reserve New Table Button */}

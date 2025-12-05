@@ -13,7 +13,7 @@ export default function LayoutClient({
   const pathname = usePathname();
 
   // Check if current route is admin or staff dashboard
-  const isAdminRoute = pathname?.startsWith('/admin/dashboard') || pathname?.startsWith('/admin/staff') || pathname?.startsWith('/admin/reservations') || pathname?.startsWith('/admin/tables') || pathname?.startsWith('/admin/customers') || pathname?.startsWith('/admin/reports');
+  const isAdminRoute = pathname?.startsWith('/admin/dashboard') || pathname?.startsWith('/admin/staff') || pathname?.startsWith('/admin/reservations') || pathname?.startsWith('/admin/tables') || pathname?.startsWith('/admin/customers') || pathname?.startsWith('/admin/reports') || pathname?.startsWith('/admin/messages');
   const isStaffRoute = pathname?.startsWith('/staff');
   const isCustomerDashboard = pathname?.startsWith('/account') || pathname?.startsWith('/my-reservations');
   const isMenuRoute = pathname === '/menu';

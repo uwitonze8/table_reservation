@@ -29,10 +29,10 @@ export default function AdminLoginPage() {
     setError('');
     setIsSubmitting(true);
 
-    const success = await login(formData.email, formData.password, 'admin');
+    const result = await login(formData.email, formData.password);
 
-    if (!success) {
-      setError('Invalid admin credentials. Use: admin@quicktable.com / admin123');
+    if (!result.success) {
+      setError(result.message || 'Invalid admin credentials. Use: admin@quicktable.com / admin123');
       setIsSubmitting(false);
     }
   };

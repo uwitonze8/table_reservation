@@ -1,14 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)",
-      "Bash(npm run dev:*)",
-      "Bash(timeout:*)",
-      "Bash(nul)",
-      "Bash(dir C:table_reservationtable_reservationapp /b /s 2)",
-      "Bash(findstr:*)",
-      "Bash(npm install:*)",
-      "Bash(dir:*)"
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(if not exist \"c:\\table_reservation\\table-reservation-backend\\src\\main\\java\\com\\example\\tablereservation\\controller\\staff\" mkdir \"c:\\table_reservation\\table-reservation-backend\\src\\main\\java\\com\\example\\tablereservation\\controller\\staff\")",
+      "Bash(mvn compile:*)"
     ],
     "deny": [],
     "ask": []

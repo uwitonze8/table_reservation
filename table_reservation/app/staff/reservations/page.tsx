@@ -1,44 +1,140 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import StaffSidebar from '@/components/staff/StaffSidebar';
-
-// Mock data
-const mockReservations = [
-  { id: 'RES-101', customer: 'John Smith', phone: '555-0101', time: '12:00 PM', guests: 4, table: 5, status: 'seated', notes: 'Window seat preferred' },
-  { id: 'RES-102', customer: 'Sarah Johnson', phone: '555-0102', time: '1:30 PM', guests: 2, table: 12, status: 'confirmed', notes: '' },
-  { id: 'RES-103', customer: 'Michael Brown', phone: '555-0103', time: '2:00 PM', guests: 6, table: 10, status: 'arriving', notes: 'Birthday celebration' },
-  { id: 'RES-104', customer: 'Emily Davis', phone: '555-0104', time: '6:00 PM', guests: 2, table: 1, status: 'confirmed', notes: '' },
-  { id: 'RES-105', customer: 'David Wilson', phone: '555-0105', time: '7:30 PM', guests: 4, table: 8, status: 'confirmed', notes: 'Anniversary dinner' },
-  { id: 'RES-106', customer: 'Lisa Anderson', phone: '555-0106', time: '8:00 PM', guests: 3, table: 14, status: 'pending', notes: '' },
-];
+import { staffApi, Reservation } from '@/lib/api';
 
 export default function StaffReservationsPage() {
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
-  const [selectedReservation, setSelectedReservation] = useState<typeof mockReservations[0] | null>(null);
+  const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const filteredReservations = mockReservations.filter(reservation => {
+  useEffect(() => {
+    fetchReservations();
+  }, []);
+
+  const fetchReservations = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      console.log('Fetching today\'s reservations...');
+      const response = await staffApi.getTodayReservations();
+      console.log('Reservations response:', response);
+      if (response.success && response.data) {
+        setReservations(response.data);
+      } else {
+        setError(response.message || 'Failed to load reservations');
+      }
+    } catch (err) {
+      console.error('Failed to fetch reservations:', err);
+      setError('Failed to load reservations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredReservations = reservations.filter(reservation => {
     if (filter === 'all') return true;
-    return reservation.status === filter;
+    return reservation.status === filter.toUpperCase();
   });
 
   const stats = {
-    total: mockReservations.length,
-    seated: mockReservations.filter(r => r.status === 'seated').length,
-    arriving: mockReservations.filter(r => r.status === 'arriving').length,
-    confirmed: mockReservations.filter(r => r.status === 'confirmed').length,
-    pending: mockReservations.filter(r => r.status === 'pending').length,
+    total: reservations.length,
+    completed: reservations.filter(r => r.status === 'COMPLETED').length,
+    confirmed: reservations.filter(r => r.status === 'CONFIRMED').length,
+    pending: reservations.filter(r => r.status === 'PENDING').length,
+    cancelled: reservations.filter(r => r.status === 'CANCELLED').length,
   };
 
-  const handleUpdateStatus = (reservationId: string, newStatus: string) => {
-    console.log(`Updating reservation ${reservationId} to status: ${newStatus}`);
-    // In a real app, this would update the database
+  const handleConfirmReservation = async (id: number) => {
+    try {
+      setActionLoading(true);
+      const response = await staffApi.confirmReservation(id);
+      if (response.success) {
+        await fetchReservations();
+        setSelectedReservation(null);
+      } else {
+        alert(response.message || 'Failed to confirm reservation');
+      }
+    } catch (err) {
+      alert('Failed to confirm reservation');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleSeatGuests = (reservation: typeof mockReservations[0]) => {
-    console.log(`Seating guests for reservation: ${reservation.id}`);
-    handleUpdateStatus(reservation.id, 'seated');
+  const handleCompleteReservation = async (id: number) => {
+    try {
+      setActionLoading(true);
+      const response = await staffApi.completeReservation(id);
+      if (response.success) {
+        await fetchReservations();
+        setSelectedReservation(null);
+      } else {
+        alert(response.message || 'Failed to complete reservation');
+      }
+    } catch (err) {
+      alert('Failed to complete reservation');
+    } finally {
+      setActionLoading(false);
+    }
   };
+
+  const handleCancelReservation = async (id: number) => {
+    if (!confirm('Are you sure you want to cancel this reservation?')) return;
+    try {
+      setActionLoading(true);
+      const response = await staffApi.cancelReservation(id, 'Cancelled by staff');
+      if (response.success) {
+        await fetchReservations();
+        setSelectedReservation(null);
+      } else {
+        alert(response.message || 'Failed to cancel reservation');
+      }
+    } catch (err) {
+      alert('Failed to cancel reservation');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'COMPLETED':
+        return 'bg-green-100 text-green-800';
+      case 'CONFIRMED':
+        return 'bg-blue-100 text-blue-800';
+      case 'PENDING':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'CANCELLED':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatStatus = (status: string) => {
+    return status.charAt(0) + status.slice(1).toLowerCase();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-[#F8F4F0]">
+        <StaffSidebar />
+        <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-sm text-[#333333] opacity-70">Loading reservations...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8F4F0]">
@@ -47,12 +143,29 @@ export default function StaffReservationsPage() {
       <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-[#333333]">Today's Reservations</h1>
-            <p className="text-sm text-[#333333] opacity-70 mt-1">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-            </p>
+          <div className="mb-6 flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold text-[#333333]">Today&apos;s Reservations</h1>
+              <p className="text-sm text-[#333333] opacity-70 mt-1">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            </div>
+            <button
+              onClick={fetchReservations}
+              className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold"
+            >
+              Refresh
+            </button>
           </div>
+
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
+              {error}
+              <button onClick={fetchReservations} className="ml-4 underline hover:no-underline">
+                Retry
+              </button>
+            </div>
+          )}
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
@@ -61,12 +174,8 @@ export default function StaffReservationsPage() {
               <p className="text-2xl font-bold text-[#333333]">{stats.total}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
-              <p className="text-xs text-[#333333] opacity-70 mb-1">Seated</p>
-              <p className="text-2xl font-bold text-green-600">{stats.seated}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-3">
-              <p className="text-xs text-[#333333] opacity-70 mb-1">Arriving</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.arriving}</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-1">Completed</p>
+              <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-1">Confirmed</p>
@@ -74,139 +183,107 @@ export default function StaffReservationsPage() {
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-1">Pending</p>
-              <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
+              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            </div>
+            <div className="bg-white rounded-lg shadow-md p-3">
+              <p className="text-xs text-[#333333] opacity-70 mb-1">Cancelled</p>
+              <p className="text-2xl font-bold text-red-600">{stats.cancelled}</p>
             </div>
           </div>
 
           {/* Filter Tabs */}
           <div className="bg-white rounded-lg shadow-md p-3 mb-4">
             <div className="flex gap-2 overflow-x-auto">
-              <button
-                onClick={() => setFilter('all')}
-                className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  filter === 'all'
-                    ? 'bg-[#FF6B35] text-white'
-                    : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                }`}
-              >
-                All ({stats.total})
-              </button>
-              <button
-                onClick={() => setFilter('seated')}
-                className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  filter === 'seated'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                }`}
-              >
-                Seated ({stats.seated})
-              </button>
-              <button
-                onClick={() => setFilter('arriving')}
-                className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  filter === 'arriving'
-                    ? 'bg-yellow-600 text-white'
-                    : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                }`}
-              >
-                Arriving ({stats.arriving})
-              </button>
-              <button
-                onClick={() => setFilter('confirmed')}
-                className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  filter === 'confirmed'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                }`}
-              >
-                Confirmed ({stats.confirmed})
-              </button>
-              <button
-                onClick={() => setFilter('pending')}
-                className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
-                  filter === 'pending'
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                }`}
-              >
-                Pending ({stats.pending})
-              </button>
+              {[
+                { key: 'all', label: 'All', count: stats.total, color: 'bg-[#FF6B35]' },
+                { key: 'COMPLETED', label: 'Completed', count: stats.completed, color: 'bg-green-600' },
+                { key: 'CONFIRMED', label: 'Confirmed', count: stats.confirmed, color: 'bg-blue-600' },
+                { key: 'PENDING', label: 'Pending', count: stats.pending, color: 'bg-yellow-600' },
+                { key: 'CANCELLED', label: 'Cancelled', count: stats.cancelled, color: 'bg-red-600' },
+              ].map(({ key, label, count, color }) => (
+                <button
+                  key={key}
+                  onClick={() => setFilter(key)}
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-colors whitespace-nowrap ${
+                    filter === key
+                      ? `${color} text-white`
+                      : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
+                  }`}
+                >
+                  {label} ({count})
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Reservations Table */}
           <div className="bg-white rounded-lg shadow-md p-4">
             <h2 className="text-xl font-bold text-[#333333] mb-4">Reservations</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">ID</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Customer</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Phone</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Time</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Guests</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Table</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Status</th>
-                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredReservations.map((reservation) => (
-                    <tr key={reservation.id} className="border-b border-gray-100 hover:bg-[#F8F4F0] transition-colors">
-                      <td className="py-3 px-3 text-xs text-[#333333] font-medium">{reservation.id}</td>
-                      <td className="py-3 px-3 text-xs font-semibold text-[#333333]">{reservation.customer}</td>
-                      <td className="py-3 px-3 text-xs text-[#333333]">{reservation.phone}</td>
-                      <td className="py-3 px-3 text-xs text-[#333333]">{reservation.time}</td>
-                      <td className="py-3 px-3 text-xs text-[#333333]">{reservation.guests}</td>
-                      <td className="py-3 px-3 text-xs text-[#333333]">Table {reservation.table}</td>
-                      <td className="py-3 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          reservation.status === 'seated'
-                            ? 'bg-green-100 text-green-800'
-                            : reservation.status === 'arriving'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : reservation.status === 'confirmed'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-orange-100 text-orange-800'
-                        }`}>
-                          {reservation.status.charAt(0).toUpperCase() + reservation.status.slice(1)}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setSelectedReservation(reservation)}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
-                            title="View Details"
-                          >
-                            View
-                          </button>
-                          {reservation.status === 'confirmed' && (
-                            <button
-                              onClick={() => handleUpdateStatus(reservation.id, 'arriving')}
-                              className="text-yellow-600 hover:text-yellow-800 text-xs font-semibold"
-                              title="Mark as Arriving"
-                            >
-                              Arriving
-                            </button>
-                          )}
-                          {(reservation.status === 'confirmed' || reservation.status === 'arriving') && (
-                            <button
-                              onClick={() => handleSeatGuests(reservation)}
-                              className="text-green-600 hover:text-green-800 text-xs font-semibold"
-                              title="Seat Guests"
-                            >
-                              Seat
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            {filteredReservations.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-sm text-[#333333] opacity-70">No reservations found</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Code</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Customer</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Phone</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Time</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Guests</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Table</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Status</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {filteredReservations.map((reservation) => (
+                      <tr key={reservation.id} className="border-b border-gray-100 hover:bg-[#F8F4F0] transition-colors">
+                        <td className="py-3 px-3 text-xs text-[#333333] font-medium">{reservation.reservationCode}</td>
+                        <td className="py-3 px-3 text-xs font-semibold text-[#333333]">{reservation.customerName}</td>
+                        <td className="py-3 px-3 text-xs text-[#333333]">{reservation.customerPhone}</td>
+                        <td className="py-3 px-3 text-xs text-[#333333]">{reservation.reservationTime}</td>
+                        <td className="py-3 px-3 text-xs text-[#333333]">{reservation.numberOfGuests}</td>
+                        <td className="py-3 px-3 text-xs text-[#333333]">{reservation.tableName || `Table ${reservation.tableNumber}`}</td>
+                        <td className="py-3 px-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(reservation.status)}`}>
+                            {formatStatus(reservation.status)}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setSelectedReservation(reservation)}
+                              className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
+                            >
+                              View
+                            </button>
+                            {reservation.status === 'PENDING' && (
+                              <button
+                                onClick={() => handleConfirmReservation(reservation.id)}
+                                className="text-green-600 hover:text-green-800 text-xs font-semibold"
+                              >
+                                Confirm
+                              </button>
+                            )}
+                            {reservation.status === 'CONFIRMED' && (
+                              <button
+                                onClick={() => handleCompleteReservation(reservation.id)}
+                                className="text-green-600 hover:text-green-800 text-xs font-semibold"
+                              >
+                                Complete
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -218,7 +295,7 @@ export default function StaffReservationsPage() {
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <div>
                 <h2 className="text-xl font-bold text-[#333333]">Reservation Details</h2>
-                <p className="text-xs text-[#333333] opacity-70">{selectedReservation.id}</p>
+                <p className="text-xs text-[#333333] opacity-70">{selectedReservation.reservationCode}</p>
               </div>
               <button
                 onClick={() => setSelectedReservation(null)}
@@ -233,66 +310,67 @@ export default function StaffReservationsPage() {
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-1">Customer Name</p>
-                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.customer}</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.customerName}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-1">Phone Number</p>
-                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.phone}</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.customerPhone}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#333333] opacity-70 mb-1">Time</p>
-                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.time}</p>
+                  <p className="text-xs text-[#333333] opacity-70 mb-1">Email</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.customerEmail}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-[#333333] opacity-70 mb-1">Date & Time</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.reservationDate} at {selectedReservation.reservationTime}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-1">Party Size</p>
-                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.guests} guests</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.numberOfGuests} guests</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#333333] opacity-70 mb-1">Table Number</p>
-                  <p className="text-sm font-semibold text-[#333333]">Table {selectedReservation.table}</p>
+                  <p className="text-xs text-[#333333] opacity-70 mb-1">Table</p>
+                  <p className="text-sm font-semibold text-[#333333]">{selectedReservation.tableName || `Table ${selectedReservation.tableNumber}`}</p>
                 </div>
                 <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-1">Status</p>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
-                    selectedReservation.status === 'seated'
-                      ? 'bg-green-100 text-green-800'
-                      : selectedReservation.status === 'arriving'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : selectedReservation.status === 'confirmed'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-orange-100 text-orange-800'
-                  }`}>
-                    {selectedReservation.status.charAt(0).toUpperCase() + selectedReservation.status.slice(1)}
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(selectedReservation.status)}`}>
+                    {formatStatus(selectedReservation.status)}
                   </span>
                 </div>
-                {selectedReservation.notes && (
+                {selectedReservation.specialRequests && (
                   <div className="col-span-2">
-                    <p className="text-xs text-[#333333] opacity-70 mb-1">Special Notes</p>
-                    <p className="text-sm text-[#333333] bg-[#F8F4F0] p-2 rounded">{selectedReservation.notes}</p>
+                    <p className="text-xs text-[#333333] opacity-70 mb-1">Special Requests</p>
+                    <p className="text-sm text-[#333333] bg-[#F8F4F0] p-2 rounded">{selectedReservation.specialRequests}</p>
                   </div>
                 )}
               </div>
               <div className="flex gap-2">
-                {selectedReservation.status === 'confirmed' && (
+                {selectedReservation.status === 'PENDING' && (
                   <button
-                    onClick={() => {
-                      handleUpdateStatus(selectedReservation.id, 'arriving');
-                      setSelectedReservation(null);
-                    }}
-                    className="flex-1 bg-yellow-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-yellow-700 transition-colors"
+                    onClick={() => handleConfirmReservation(selectedReservation.id)}
+                    disabled={actionLoading}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
                   >
-                    Mark as Arriving
+                    Confirm Reservation
                   </button>
                 )}
-                {(selectedReservation.status === 'confirmed' || selectedReservation.status === 'arriving') && (
+                {selectedReservation.status === 'CONFIRMED' && (
                   <button
-                    onClick={() => {
-                      handleSeatGuests(selectedReservation);
-                      setSelectedReservation(null);
-                    }}
-                    className="flex-1 bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors"
+                    onClick={() => handleCompleteReservation(selectedReservation.id)}
+                    disabled={actionLoading}
+                    className="flex-1 bg-green-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
                   >
-                    Seat Guests
+                    Mark as Completed
+                  </button>
+                )}
+                {(selectedReservation.status === 'PENDING' || selectedReservation.status === 'CONFIRMED') && (
+                  <button
+                    onClick={() => handleCancelReservation(selectedReservation.id)}
+                    disabled={actionLoading}
+                    className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
                   </button>
                 )}
                 <button

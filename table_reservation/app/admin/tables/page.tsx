@@ -1,51 +1,64 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
-
-// Mock data
-const mockTables = [
-  { id: 1, number: 1, capacity: 2, location: 'Window', status: 'available', shape: 'round' },
-  { id: 2, number: 2, capacity: 2, location: 'Window', status: 'occupied', shape: 'square' },
-  { id: 3, number: 3, capacity: 4, location: 'Center', status: 'available', shape: 'square' },
-  { id: 4, number: 4, capacity: 4, location: 'Center', status: 'reserved', shape: 'rectangle' },
-  { id: 5, number: 5, capacity: 4, location: 'Center', status: 'available', shape: 'square' },
-  { id: 6, number: 6, capacity: 6, location: 'Center', status: 'occupied', shape: 'rectangle' },
-  { id: 7, number: 7, capacity: 2, location: 'Patio', status: 'available', shape: 'round' },
-  { id: 8, number: 8, capacity: 4, location: 'Patio', status: 'available', shape: 'square' },
-  { id: 9, number: 9, capacity: 4, location: 'Patio', status: 'maintenance', shape: 'square' },
-  { id: 10, number: 10, capacity: 6, location: 'Center', status: 'reserved', shape: 'rectangle' },
-  { id: 11, number: 11, capacity: 8, location: 'Private', status: 'available', shape: 'rectangle' },
-  { id: 12, number: 12, capacity: 2, location: 'Window', status: 'occupied', shape: 'round' },
-  { id: 13, number: 13, capacity: 4, location: 'Bar', status: 'available', shape: 'square' },
-  { id: 14, number: 14, capacity: 4, location: 'Bar', status: 'available', shape: 'square' },
-  { id: 15, number: 15, capacity: 2, location: 'Window', status: 'available', shape: 'round' },
-];
+import { adminApi, Table } from '@/lib/api';
 
 export default function AdminTablesPage() {
+  const [tables, setTables] = useState<Table[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
-  const [selectedTable, setSelectedTable] = useState<typeof mockTables[0] | null>(null);
+  const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTable, setNewTable] = useState({
-    number: '',
+    tableNumber: '',
     capacity: '',
-    location: 'Window',
-    shape: 'square'
+    location: 'WINDOW',
+    shape: 'SQUARE',
   });
+  const [actionLoading, setActionLoading] = useState(false);
 
-  const filteredTables = mockTables.filter(table => {
-    const matchesStatus = filter === 'all' || table.status === filter;
+  // Fetch tables from API
+  useEffect(() => {
+    fetchTables();
+  }, []);
+
+  const fetchTables = async () => {
+    try {
+      setLoading(true);
+      const response = await adminApi.getAllTables();
+      if (response.success && response.data) {
+        setTables(response.data);
+      } else {
+        setError(response.message || 'Failed to load tables');
+      }
+    } catch (err) {
+      console.error('Failed to fetch tables:', err);
+      setError('Failed to load tables. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Map API status to display status
+  const getTableStatus = (table: Table): string => {
+    return table.status.toLowerCase();
+  };
+
+  const filteredTables = tables.filter(table => {
+    const status = getTableStatus(table);
+    const matchesStatus = filter === 'all' || status === filter;
     const matchesLocation = locationFilter === 'all' || table.location === locationFilter;
     return matchesStatus && matchesLocation;
   });
 
   const stats = {
-    total: mockTables.length,
-    available: mockTables.filter(t => t.status === 'available').length,
-    occupied: mockTables.filter(t => t.status === 'occupied').length,
-    reserved: mockTables.filter(t => t.status === 'reserved').length,
-    maintenance: mockTables.filter(t => t.status === 'maintenance').length,
+    total: tables.length,
+    available: tables.filter(t => t.status === 'AVAILABLE').length,
+    occupied: tables.filter(t => t.status === 'OCCUPIED' || t.status === 'RESERVED').length,
+    maintenance: tables.filter(t => t.status === 'MAINTENANCE').length,
   };
 
   const getStatusColor = (status: string) => {
@@ -62,6 +75,106 @@ export default function AdminTablesPage() {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const handleAddTable = async () => {
+    try {
+      setActionLoading(true);
+      const response = await adminApi.createTable({
+        tableNumber: parseInt(newTable.tableNumber),
+        capacity: parseInt(newTable.capacity),
+        location: newTable.location,
+        shape: newTable.shape,
+      });
+
+      if (response.success) {
+        await fetchTables();
+        setShowAddModal(false);
+        setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
+      } else {
+        alert(response.message || 'Failed to add table');
+      }
+    } catch (err) {
+      alert('Failed to add table. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (tableId: number, status: string) => {
+    try {
+      setActionLoading(true);
+      const response = await adminApi.updateTableStatus(tableId, status);
+
+      if (response.success) {
+        await fetchTables();
+        setSelectedTable(null);
+      } else {
+        alert(response.message || 'Failed to update table status');
+      }
+    } catch (err) {
+      alert('Failed to update table status. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteTable = async (tableId: number) => {
+    if (!confirm('Are you sure you want to delete this table?')) return;
+
+    try {
+      setActionLoading(true);
+      const response = await adminApi.deleteTable(tableId);
+
+      if (response.success) {
+        await fetchTables();
+        setSelectedTable(null);
+      } else {
+        alert(response.message || 'Failed to delete table');
+      }
+    } catch (err) {
+      alert('Failed to delete table. Please try again.');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Get unique locations for filter
+  const locations = [...new Set(tables.map(t => t.location))];
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen bg-[#F8F4F0]">
+        <AdminSidebar />
+        <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin w-12 h-12 border-4 border-[#FF6B35] border-t-transparent rounded-full mx-auto mb-4"></div>
+              <p className="text-sm text-[#333333] opacity-70">Loading tables...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen bg-[#F8F4F0]">
+        <AdminSidebar />
+        <main className="flex-1 ml-64 py-8 px-4 sm:px-6">
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+            <button
+              onClick={fetchTables}
+              className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#F8F4F0]">
@@ -80,7 +193,7 @@ export default function AdminTablesPage() {
               </div>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold cursor-pointer"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -91,7 +204,7 @@ export default function AdminTablesPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-0.5">Total Tables</p>
               <p className="text-2xl font-bold text-[#333333]">{stats.total}</p>
@@ -103,10 +216,6 @@ export default function AdminTablesPage() {
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-0.5">Occupied</p>
               <p className="text-2xl font-bold text-red-600">{stats.occupied}</p>
-            </div>
-            <div className="bg-white rounded-lg shadow-md p-3">
-              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Reserved</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.reserved}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-0.5">Maintenance</p>
@@ -122,7 +231,7 @@ export default function AdminTablesPage() {
                 <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => setFilter('all')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'all'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -132,7 +241,7 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => setFilter('available')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'available'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -142,7 +251,7 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => setFilter('occupied')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'occupied'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -151,18 +260,8 @@ export default function AdminTablesPage() {
                     Occupied
                   </button>
                   <button
-                    onClick={() => setFilter('reserved')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
-                      filter === 'reserved'
-                        ? 'bg-[#FF6B35] text-white'
-                        : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
-                    }`}
-                  >
-                    Reserved
-                  </button>
-                  <button
                     onClick={() => setFilter('maintenance')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'maintenance'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -177,14 +276,12 @@ export default function AdminTablesPage() {
                 <select
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                 >
                   <option value="all">All Locations</option>
-                  <option value="Window">Window</option>
-                  <option value="Center">Center</option>
-                  <option value="Patio">Patio</option>
-                  <option value="Bar">Bar</option>
-                  <option value="Private">Private</option>
+                  {locations.map(location => (
+                    <option key={location} value={location}>{location}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -193,55 +290,50 @@ export default function AdminTablesPage() {
           {/* Tables Grid */}
           <div className="bg-white rounded-lg shadow-md p-4">
             <h2 className="text-xl font-bold text-[#333333] mb-4">Tables</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-              {filteredTables.map((table) => (
-                <div
-                  key={table.id}
-                  onClick={() => setSelectedTable(table)}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg ${
-                    table.status === 'available'
-                      ? 'border-green-300 bg-green-50'
-                      : table.status === 'occupied'
-                      ? 'border-red-300 bg-red-50'
-                      : table.status === 'reserved'
-                      ? 'border-yellow-300 bg-yellow-50'
-                      : 'border-gray-300 bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-lg font-bold text-[#333333]">#{table.number}</div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(table.status)}`}>
-                      {table.status.charAt(0).toUpperCase() + table.status.slice(1)}
-                    </span>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-[#333333]">
-                      <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      <span className="font-semibold">{table.capacity} seats</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-[#333333]">
-                      <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span>{table.location}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-[#333333]">
-                      <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6z" />
-                      </svg>
-                      <span className="capitalize">{table.shape}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {filteredTables.length === 0 && (
+            {filteredTables.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-[#333333] opacity-70">No tables found</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {filteredTables.map((table) => {
+                  const status = getTableStatus(table);
+                  return (
+                    <div
+                      key={table.id}
+                      onClick={() => setSelectedTable(table)}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all hover:shadow-lg ${
+                        status === 'available'
+                          ? 'border-green-300 bg-green-50'
+                          : status === 'occupied'
+                          ? 'border-red-300 bg-red-50'
+                          : 'border-gray-300 bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-lg font-bold text-[#333333]">#{table.tableNumber}</div>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(status)}`}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs text-[#333333]">
+                          <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                          </svg>
+                          <span className="font-semibold">{table.capacity} seats</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-[#333333]">
+                          <svg className="w-3.5 h-3.5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                          </svg>
+                          <span>{table.location}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -250,13 +342,13 @@ export default function AdminTablesPage() {
 
       {/* Table Details Modal */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-xl font-bold text-[#333333]">Table #{selectedTable.number}</h2>
+              <h2 className="text-xl font-bold text-[#333333]">Table #{selectedTable.tableNumber}</h2>
               <button
                 onClick={() => setSelectedTable(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -267,8 +359,8 @@ export default function AdminTablesPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-1">Status</p>
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(selectedTable.status)}`}>
-                    {selectedTable.status.charAt(0).toUpperCase() + selectedTable.status.slice(1)}
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${getStatusColor(getTableStatus(selectedTable))}`}>
+                    {getTableStatus(selectedTable).charAt(0).toUpperCase() + getTableStatus(selectedTable).slice(1)}
                   </span>
                 </div>
                 <div>
@@ -280,32 +372,38 @@ export default function AdminTablesPage() {
                   <p className="text-sm font-semibold text-[#333333]">{selectedTable.location}</p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#333333] opacity-70 mb-1">Shape</p>
-                  <p className="text-sm font-semibold text-[#333333] capitalize">{selectedTable.shape}</p>
-                </div>
-                <div>
                   <p className="text-xs text-[#333333] opacity-70 mb-2">Change Status</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <button className="px-3 py-2 text-xs bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors">
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTable.id, 'AVAILABLE')}
+                      disabled={actionLoading}
+                      className="px-3 py-2 text-xs bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                    >
                       Set Available
                     </button>
-                    <button className="px-3 py-2 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTable.id, 'OCCUPIED')}
+                      disabled={actionLoading}
+                      className="px-3 py-2 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                    >
                       Set Occupied
                     </button>
-                    <button className="px-3 py-2 text-xs bg-yellow-600 text-white rounded-lg font-semibold hover:bg-yellow-700 transition-colors">
-                      Set Reserved
-                    </button>
-                    <button className="px-3 py-2 text-xs bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors">
-                      Maintenance
+                    <button
+                      onClick={() => handleUpdateStatus(selectedTable.id, 'MAINTENANCE')}
+                      disabled={actionLoading}
+                      className="px-3 py-2 text-xs bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 col-span-2 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                      Set Maintenance
                     </button>
                   </div>
                 </div>
               </div>
               <div className="flex gap-2 mt-6">
-                <button className="flex-1 bg-blue-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                  Edit Details
-                </button>
-                <button className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors">
+                <button
+                  onClick={() => handleDeleteTable(selectedTable.id)}
+                  disabled={actionLoading}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+                >
                   Delete Table
                 </button>
               </div>
@@ -316,16 +414,16 @@ export default function AdminTablesPage() {
 
       {/* Add Table Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h2 className="text-xl font-bold text-[#333333]">Add New Table</h2>
               <button
                 onClick={() => {
                   setShowAddModal(false);
-                  setNewTable({ number: '', capacity: '', location: 'Window', shape: 'square' });
+                  setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
                 }}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -335,10 +433,7 @@ export default function AdminTablesPage() {
             <div className="p-4">
               <form onSubmit={(e) => {
                 e.preventDefault();
-                // In a real app, this would call an API to create the table
-                console.log('Adding table:', newTable);
-                setShowAddModal(false);
-                setNewTable({ number: '', capacity: '', location: 'Window', shape: 'square' });
+                handleAddTable();
               }} className="space-y-4">
                 <div>
                   <label htmlFor="tableNumber" className="block text-xs font-semibold text-[#333333] mb-2">
@@ -348,8 +443,8 @@ export default function AdminTablesPage() {
                     type="number"
                     id="tableNumber"
                     required
-                    value={newTable.number}
-                    onChange={(e) => setNewTable({ ...newTable, number: e.target.value })}
+                    value={newTable.tableNumber}
+                    onChange={(e) => setNewTable({ ...newTable, tableNumber: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none"
                     placeholder="Enter table number"
                   />
@@ -381,13 +476,13 @@ export default function AdminTablesPage() {
                     required
                     value={newTable.location}
                     onChange={(e) => setNewTable({ ...newTable, location: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                   >
-                    <option value="Window">Window</option>
-                    <option value="Center">Center</option>
-                    <option value="Patio">Patio</option>
-                    <option value="Bar">Bar</option>
-                    <option value="Private">Private</option>
+                    <option value="WINDOW">Window</option>
+                    <option value="CENTER">Center</option>
+                    <option value="PATIO">Patio</option>
+                    <option value="BAR">Bar</option>
+                    <option value="PRIVATE">Private</option>
                   </select>
                 </div>
 
@@ -400,12 +495,12 @@ export default function AdminTablesPage() {
                     required
                     value={newTable.shape}
                     onChange={(e) => setNewTable({ ...newTable, shape: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                   >
-                    <option value="square">Square</option>
-                    <option value="round">Round</option>
-                    <option value="rectangle">Rectangle</option>
-                    <option value="oval">Oval</option>
+                    <option value="SQUARE">Square</option>
+                    <option value="ROUND">Round</option>
+                    <option value="RECTANGLE">Rectangle</option>
+                    <option value="OVAL">Oval</option>
                   </select>
                 </div>
 
@@ -414,17 +509,18 @@ export default function AdminTablesPage() {
                     type="button"
                     onClick={() => {
                       setShowAddModal(false);
-                      setNewTable({ number: '', capacity: '', location: 'Window', shape: 'square' });
+                      setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
                     }}
-                    className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                    className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors"
+                    disabled={actionLoading}
+                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
-                    Add Table
+                    {actionLoading ? 'Adding...' : 'Add Table'}
                   </button>
                 </div>
               </form>
