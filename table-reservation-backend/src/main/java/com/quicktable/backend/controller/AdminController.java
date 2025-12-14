@@ -39,6 +39,7 @@ public class AdminController {
     private final StaffService staffService;
     private final UserService userService;
     private final ContactMessageService contactMessageService;
+    private final MenuItemService menuItemService;
 
     // ==================== DASHBOARD ====================
 
@@ -300,5 +301,14 @@ public class AdminController {
     public ResponseEntity<ApiResponse<Void>> deleteMessage(@PathVariable Long id) {
         contactMessageService.deleteMessage(id);
         return ResponseEntity.ok(ApiResponse.success("Message deleted"));
+    }
+
+    // ==================== MENU ====================
+
+    @DeleteMapping("/menu/reset")
+    @Operation(summary = "Delete all menu items to allow re-seeding")
+    public ResponseEntity<ApiResponse<Void>> resetMenuItems() {
+        menuItemService.deleteAllMenuItems();
+        return ResponseEntity.ok(ApiResponse.success("All menu items deleted. Restart server to re-seed."));
     }
 }

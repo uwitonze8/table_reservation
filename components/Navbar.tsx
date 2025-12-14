@@ -48,12 +48,6 @@ export default function Navbar() {
               Home
             </Link>
             <Link
-              href="/menu"
-              className="text-[#333333] hover:text-[#FF6B35] transition-colors font-medium"
-            >
-              Menu
-            </Link>
-            <Link
               href="/about"
               className="text-[#333333] hover:text-[#FF6B35] transition-colors font-medium"
             >
@@ -263,13 +257,6 @@ export default function Navbar() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Home
-              </Link>
-              <Link
-                href="/menu"
-                className="text-[#333333] hover:text-[#FF6B35] transition-colors font-medium py-2"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Menu
               </Link>
               <Link
                 href="/about"

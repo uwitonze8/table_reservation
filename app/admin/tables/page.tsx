@@ -19,6 +19,33 @@ export default function AdminTablesPage() {
     shape: 'SQUARE',
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  const openDeleteModal = (table: Table) => {
+    setTableToDelete(table);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setTableToDelete(null);
+  };
 
   // Fetch tables from API
   useEffect(() => {
@@ -90,11 +117,12 @@ export default function AdminTablesPage() {
         await fetchTables();
         setShowAddModal(false);
         setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
+        showNotification('success', 'Table Added', 'New table has been added successfully.');
       } else {
-        alert(response.message || 'Failed to add table');
+        showNotification('error', 'Failed to Add', response.message || 'Failed to add table');
       }
     } catch (err) {
-      alert('Failed to add table. Please try again.');
+      showNotification('error', 'Error', 'Failed to add table. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -108,33 +136,36 @@ export default function AdminTablesPage() {
       if (response.success) {
         await fetchTables();
         setSelectedTable(null);
+        showNotification('success', 'Status Updated', 'Table status has been updated successfully.');
       } else {
-        alert(response.message || 'Failed to update table status');
+        showNotification('error', 'Update Failed', response.message || 'Failed to update table status');
       }
     } catch (err) {
-      alert('Failed to update table status. Please try again.');
+      showNotification('error', 'Error', 'Failed to update table status. Please try again.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeleteTable = async (tableId: number) => {
-    if (!confirm('Are you sure you want to delete this table?')) return;
+  const handleDeleteTable = async () => {
+    if (!tableToDelete) return;
 
     try {
-      setActionLoading(true);
-      const response = await adminApi.deleteTable(tableId);
+      setDeleteLoading(true);
+      const response = await adminApi.deleteTable(tableToDelete.id);
 
       if (response.success) {
         await fetchTables();
         setSelectedTable(null);
+        closeDeleteModal();
+        showNotification('success', 'Table Deleted', 'Table has been deleted successfully.');
       } else {
-        alert(response.message || 'Failed to delete table');
+        showNotification('error', 'Delete Failed', response.message || 'Failed to delete table');
       }
     } catch (err) {
-      alert('Failed to delete table. Please try again.');
+      showNotification('error', 'Error', 'Failed to delete table. Please try again.');
     } finally {
-      setActionLoading(false);
+      setDeleteLoading(false);
     }
   };
 
@@ -400,7 +431,7 @@ export default function AdminTablesPage() {
               </div>
               <div className="flex gap-2 mt-6">
                 <button
-                  onClick={() => handleDeleteTable(selectedTable.id)}
+                  onClick={() => openDeleteModal(selectedTable)}
                   disabled={actionLoading}
                   className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
@@ -524,6 +555,98 @@ export default function AdminTablesPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && tableToDelete && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">Delete Table</h2>
+              <button onClick={closeDeleteModal} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-2">
+                Are you sure you want to delete
+              </p>
+              <p className="text-sm font-semibold text-[#333333] text-center mb-4">
+                Table #{tableToDelete.tableNumber}?
+              </p>
+              <p className="text-xs text-gray-500 text-center mb-6">
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTable}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">{notificationModal.title}</h2>
+              <button onClick={closeNotification} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className={`flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-6">{notificationModal.message}</p>
+              <button
+                onClick={closeNotification}
+                className={`w-full px-4 py-2 text-sm rounded-lg font-semibold transition-colors cursor-pointer ${
+                  notificationModal.type === 'success'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

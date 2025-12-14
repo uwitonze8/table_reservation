@@ -13,6 +13,8 @@ const formatTime = (time24: string): string => {
   return `${hour12}:${minutes} ${ampm}`;
 };
 
+const ITEMS_PER_PAGE = 10;
+
 export default function AdminReservationsPage() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,19 +25,67 @@ export default function AdminReservationsPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+  const [statusCounts, setStatusCounts] = useState({
+    confirmed: 0,
+    completed: 0,
+    cancelled: 0,
+    pending: 0,
+  });
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  // Fetch status counts (all reservations) once on initial load
+  const fetchStatusCounts = async () => {
+    try {
+      // Fetch a large batch to count all statuses
+      const response = await adminApi.getAllReservations(0, 1000);
+      if (response.success && response.data) {
+        const allReservations = response.data.content || [];
+        setStatusCounts({
+          confirmed: allReservations.filter((r: Reservation) => r.status === 'CONFIRMED').length,
+          completed: allReservations.filter((r: Reservation) => r.status === 'COMPLETED').length,
+          cancelled: allReservations.filter((r: Reservation) => r.status === 'CANCELLED').length,
+          pending: allReservations.filter((r: Reservation) => r.status === 'PENDING').length,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch status counts:', err);
+    }
+  };
 
   // Fetch reservations from API
   useEffect(() => {
-    fetchReservations();
+    fetchReservations(currentPage);
+  }, [currentPage]);
+
+  // Fetch status counts on initial load
+  useEffect(() => {
+    fetchStatusCounts();
   }, []);
 
-  const fetchReservations = async () => {
+  const fetchReservations = async (page: number = 1) => {
     try {
       setLoading(true);
-      const response = await adminApi.getAllReservations(0, 100);
+      const response = await adminApi.getAllReservations(page - 1, ITEMS_PER_PAGE);
       if (response.success && response.data) {
-        // Extract content array from paginated response
         setReservations(response.data.content || []);
+        setTotalPages(response.data.totalPages || 1);
+        setTotalElements(response.data.totalElements || 0);
       } else {
         setError(response.message || 'Failed to load reservations');
       }
@@ -57,10 +107,51 @@ export default function AdminReservationsPage() {
   });
 
   const stats = {
-    total: reservations.length,
-    confirmed: reservations.filter(r => r.status === 'CONFIRMED').length,
-    pending: reservations.filter(r => r.status === 'PENDING').length,
-    cancelled: reservations.filter(r => r.status === 'CANCELLED').length,
+    total: totalElements,
+    confirmed: statusCounts.confirmed,
+    completed: statusCounts.completed,
+    cancelled: statusCounts.cancelled,
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
   };
 
   const handleConfirmReservation = async (reservation: Reservation) => {
@@ -68,13 +159,15 @@ export default function AdminReservationsPage() {
       setActionLoading(true);
       const response = await adminApi.confirmReservation(reservation.id);
       if (response.success) {
-        await fetchReservations();
+        await fetchReservations(currentPage);
+        await fetchStatusCounts();
         setSelectedReservation(null);
+        showNotification('success', 'Reservation Confirmed', 'The reservation has been confirmed successfully.');
       } else {
-        alert(response.message || 'Failed to confirm reservation');
+        showNotification('error', 'Failed to Confirm', response.message || 'Failed to confirm reservation');
       }
     } catch (err) {
-      alert('Failed to confirm reservation. Please try again.');
+      showNotification('error', 'Error', 'Failed to confirm reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -93,14 +186,16 @@ export default function AdminReservationsPage() {
       setActionLoading(true);
       const response = await adminApi.cancelReservation(reservationToCancel.id);
       if (response.success) {
-        await fetchReservations();
+        await fetchReservations(currentPage);
+        await fetchStatusCounts();
         setShowCancelDialog(false);
         setReservationToCancel(null);
+        showNotification('success', 'Reservation Cancelled', 'The reservation has been cancelled successfully.');
       } else {
-        alert(response.message || 'Failed to cancel reservation');
+        showNotification('error', 'Failed to Cancel', response.message || 'Failed to cancel reservation');
       }
     } catch (err) {
-      alert('Failed to cancel reservation. Please try again.');
+      showNotification('error', 'Error', 'Failed to cancel reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -111,13 +206,15 @@ export default function AdminReservationsPage() {
       setActionLoading(true);
       const response = await adminApi.completeReservation(reservation.id);
       if (response.success) {
-        await fetchReservations();
+        await fetchReservations(currentPage);
+        await fetchStatusCounts();
         setSelectedReservation(null);
+        showNotification('success', 'Reservation Completed', 'The reservation has been marked as completed.');
       } else {
-        alert(response.message || 'Failed to complete reservation');
+        showNotification('error', 'Failed to Complete', response.message || 'Failed to complete reservation');
       }
     } catch (err) {
-      alert('Failed to complete reservation. Please try again.');
+      showNotification('error', 'Error', 'Failed to complete reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -187,8 +284,8 @@ export default function AdminReservationsPage() {
               <p className="text-2xl font-bold text-green-600">{stats.confirmed}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
-              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Pending</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+              <p className="text-xs text-[#333333] opacity-70 mb-0.5">Completed</p>
+              <p className="text-2xl font-bold text-blue-600">{stats.completed}</p>
             </div>
             <div className="bg-white rounded-lg shadow-md p-3">
               <p className="text-xs text-[#333333] opacity-70 mb-0.5">Cancelled</p>
@@ -363,6 +460,59 @@ export default function AdminReservationsPage() {
                 </table>
               </div>
             )}
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-200">
+                <div className="text-xs text-[#333333] opacity-70">
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalElements)} of {totalElements} reservations
+                </div>
+                <div className="flex items-center gap-1">
+                  {/* Previous Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg text-[#333333] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Previous page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Page Numbers */}
+                  {getPageNumbers().map((page, index) => (
+                    typeof page === 'number' ? (
+                      <button
+                        key={index}
+                        onClick={() => handlePageChange(page)}
+                        className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-[#FF6B35] text-white'
+                            : 'text-[#333333] hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ) : (
+                      <span key={index} className="px-1 text-[#333333] opacity-50">...</span>
+                    )
+                  ))}
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg text-[#333333] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Next page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -432,6 +582,50 @@ export default function AdminReservationsPage() {
                   <div className="col-span-2">
                     <p className="text-xs text-[#333333] opacity-70 mb-1">Special Requests</p>
                     <p className="text-sm text-[#333333] bg-[#F8F4F0] p-2 rounded">{selectedReservation.specialRequests}</p>
+                  </div>
+                )}
+                {selectedReservation.preOrderData && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-[#333333] opacity-70 mb-1">Pre-Order</p>
+                    <div className="text-sm text-[#333333] bg-[#FFF5F0] border border-[#FF6B35]/20 p-2 rounded">
+                      {(() => {
+                        try {
+                          const preOrders = JSON.parse(selectedReservation.preOrderData);
+                          const drinkLabels: Record<string, string> = {
+                            water_soft_drinks: 'Water/Soft Drinks',
+                            wine: 'Wine',
+                            beer: 'Beer',
+                            cocktails: 'Cocktails',
+                            coffee_tea: 'Coffee/Tea',
+                          };
+                          const foodLabels: Record<string, string> = {
+                            appetizers: 'Appetizers',
+                            main_course: 'Main Course',
+                            desserts: 'Desserts',
+                            full_course: 'Full Course',
+                          };
+                          return preOrders.map((order: { drinks: string; food: string }, idx: number) => (
+                            <div key={idx} className="flex items-center gap-2 py-1">
+                              <span className="font-semibold text-[#FF6B35]">Guest {idx + 1}:</span>
+                              <span>
+                                {[
+                                  order.drinks && drinkLabels[order.drinks],
+                                  order.food && foodLabels[order.food]
+                                ].filter(Boolean).join(' + ')}
+                              </span>
+                            </div>
+                          ));
+                        } catch {
+                          return <span>{selectedReservation.preOrderData}</span>;
+                        }
+                      })()}
+                    </div>
+                  </div>
+                )}
+                {selectedReservation.dietaryNotes && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-[#333333] opacity-70 mb-1">Dietary Notes</p>
+                    <p className="text-sm text-[#333333] bg-yellow-50 border border-yellow-200 p-2 rounded">{selectedReservation.dietaryNotes}</p>
                   </div>
                 )}
               </div>
@@ -531,6 +725,48 @@ export default function AdminReservationsPage() {
                   {actionLoading ? 'Cancelling...' : 'Cancel Reservation'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">{notificationModal.title}</h2>
+              <button onClick={closeNotification} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className={`flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-6">{notificationModal.message}</p>
+              <button
+                onClick={closeNotification}
+                className={`w-full px-4 py-2 text-sm rounded-lg font-semibold transition-colors cursor-pointer ${
+                  notificationModal.type === 'success'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

@@ -5,16 +5,25 @@ export default function Home() {
     <main className="min-h-screen">
       {/* Hero Section with Blurred Background */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">
-        {/* Background Image */}
+        {/* Background Image - Base (Not Blurred) */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
           style={{
             backgroundImage: `url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=2070&auto=format&fit=crop')`,
-            filter: 'blur(3px)',
+          }}
+        ></div>
+        {/* Top Blur Overlay with Gradient Fade */}
+        <div
+          className="absolute inset-x-0 top-0 h-[60%] z-0"
+          style={{
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            maskImage: 'linear-gradient(to bottom, black 0%, black 60%, transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, black 60%, transparent 100%)',
           }}
         ></div>
         {/* Dark Overlay for text readability */}
-        <div className="absolute inset-0 z-0 bg-black/30"></div>
+        <div className="absolute inset-0 z-0 bg-black/60"></div>
 
         {/* Content - Centered */}
         <div className="relative z-10 flex flex-col items-center justify-center text-center px-4 sm:px-6 lg:px-8">
@@ -24,28 +33,18 @@ export default function Home() {
           <p className="text-xl sm:text-2xl text-white/90 mb-10 max-w-3xl drop-shadow-md">
             Experience culinary excellence where every dish tells a story of passion, tradition, and innovation
           </p>
-          <div className="flex flex-col sm:flex-row gap-5 justify-center items-center">
-            <Link
-              href="/reservation"
-              className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-[#FF6B35] to-[#ff8c5a] text-white px-10 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl hover:shadow-orange-500/30 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
-            >
-              <span>Reserve Your Table</span>
-              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-            </Link>
-            <Link
-              href="/menu"
-              className="group relative inline-flex items-center gap-2 bg-white/10 backdrop-blur-md text-white px-10 py-4 rounded-full text-lg font-semibold border-2 border-white/50 hover:bg-white hover:text-[#333333] shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
-            >
-              <span>View Menu</span>
-              <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-          </div>
+          <Link
+            href="/reservation"
+            className="group relative inline-flex items-center gap-2 bg-gradient-to-r from-[#FF6B35] to-[#ff8c5a] text-white px-10 py-4 rounded-full text-lg font-semibold shadow-xl hover:shadow-2xl hover:shadow-orange-500/30 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1"
+          >
+            <span>Reserve Your Table</span>
+            <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </Link>
         </div>
       </section>
+
       {/* Features Section */}
       <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-gray-50">
         <div className="max-w-7xl mx-auto">
@@ -120,9 +119,7 @@ export default function Home() {
         </div>
       </section>
 
-      
-      
-    {/* Hours & Location Section */}
+      {/* Hours & Location Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-[#F8F4F0]">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">

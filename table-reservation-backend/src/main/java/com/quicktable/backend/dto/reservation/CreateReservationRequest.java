@@ -40,4 +40,10 @@ public class CreateReservationRequest {
 
     @Size(max = 1000, message = "Special requests must be less than 1000 characters")
     private String specialRequests;
+
+    @Size(max = 2000, message = "Pre-order data must be less than 2000 characters")
+    private String preOrderData;
+
+    @Size(max = 500, message = "Dietary notes must be less than 500 characters")
+    private String dietaryNotes;
 }

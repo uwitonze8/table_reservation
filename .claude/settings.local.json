@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn spring-boot:run:*)",
+      "Bash(PGPASSWORD=postgres123 psql:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c \"taskkill /F /IM java.exe\")",
+      "Bash(curl:*)",
+      "Bash(TOKEN=\"eyJhbGciOiJIUzUxMiJ9.eyJmaXJzdE5hbWUiOiJBZG1pbiIsImxhc3ROYW1lIjoiVXNlciIsInJvbGUiOiJBRE1JTiIsImlkIjoxLCJ1c2VyVHlwZSI6IlVTRVIiLCJzdWIiOiJhZG1pbkBxdWlja3RhYmxlLmNvbSIsImlhdCI6MTc2NTc0MTAzMywiZXhwIjoxNzY1ODI3NDMzfQ.JZeE7SXeT4pYs0d3HiudNZymyGiAF0DlJ__7gyMQXlTf5Y2XZfe0fi4zuXwotp_olNq1KeO1qTEDd2Ewwhnwjg\")",
+      "Bash(cmd.exe /c \"netstat -ano | findstr :8081\")",
+      "Bash(mvn clean compile spring-boot:run:*)",
+      "Bash(netstat:*)"
+    ]
+  }
+}

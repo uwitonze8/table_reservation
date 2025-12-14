@@ -54,6 +54,12 @@ public class Reservation {
     @Column(length = 1000)
     private String specialRequests;
 
+    @Column(length = 2000)
+    private String preOrderData;
+
+    @Column(length = 500)
+    private String dietaryNotes;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

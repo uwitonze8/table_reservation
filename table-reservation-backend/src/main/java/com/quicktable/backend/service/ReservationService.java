@@ -66,6 +66,8 @@ public class ReservationService {
                 .reservationTime(request.getReservationTime())
                 .numberOfGuests(request.getNumberOfGuests())
                 .specialRequests(request.getSpecialRequests())
+                .preOrderData(request.getPreOrderData())
+                .dietaryNotes(request.getDietaryNotes())
                 .status(ReservationStatus.CONFIRMED)
                 .loyaltyPointsEarned(0)
                 .build();
@@ -314,6 +316,8 @@ public class ReservationService {
                 .reservationTime(request.getReservationTime())
                 .numberOfGuests(request.getNumberOfGuests())
                 .specialRequests(request.getSpecialRequests())
+                .preOrderData(request.getPreOrderData())
+                .dietaryNotes(request.getDietaryNotes())
                 .status(ReservationStatus.CONFIRMED)
                 .loyaltyPointsEarned(0)
                 .build();

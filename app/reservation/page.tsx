@@ -4,12 +4,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import TableLayout, { Table } from '@/components/reservation/TableLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { reservationApi, tableApi } from '@/lib/api';
+import { reservationApi, tableApi, menuApi, MenuItem } from '@/lib/api';
 
 export default function ReservationPage() {
   const router = useRouter();
   const { user, isLoggedIn } = useAuth();
   const [step, setStep] = useState(1);
+  // Type for guest pre-order
+  type GuestPreOrder = {
+    drinks: string;
+    food: string;
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -20,7 +26,57 @@ export default function ReservationPage() {
     specialRequests: '',
     tableId: '',
     tableName: '',
+    // Pre-order fields
+    guestPreOrders: [] as GuestPreOrder[],
+    dietaryNotes: '',
   });
+
+  const [showPreOrder, setShowPreOrder] = useState(false);
+
+  // Menu items from API
+  const [drinkCategories, setDrinkCategories] = useState<Record<string, MenuItem[]>>({});
+  const [foodCategories, setFoodCategories] = useState<Record<string, MenuItem[]>>({});
+  const [menuLoading, setMenuLoading] = useState(true);
+
+  // Fetch menu items on mount
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      try {
+        const [drinksRes, foodRes] = await Promise.all([
+          menuApi.getDrinksGrouped(),
+          menuApi.getFoodGrouped(),
+        ]);
+
+        if (drinksRes.success && drinksRes.data) {
+          setDrinkCategories(drinksRes.data);
+        }
+        if (foodRes.success && foodRes.data) {
+          setFoodCategories(foodRes.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch menu items:', err);
+      } finally {
+        setMenuLoading(false);
+      }
+    };
+
+    fetchMenuItems();
+  }, []);
+
+  // Initialize guest pre-orders when guest count changes
+  useEffect(() => {
+    const guestCount = parseInt(formData.guests);
+    const currentLength = formData.guestPreOrders.length;
+
+    if (guestCount !== currentLength) {
+      const newPreOrders: GuestPreOrder[] = [];
+      for (let i = 0; i < guestCount; i++) {
+        // Preserve existing selections if available
+        newPreOrders.push(formData.guestPreOrders[i] || { drinks: '', food: '' });
+      }
+      setFormData(prev => ({ ...prev, guestPreOrders: newPreOrders }));
+    }
+  }, [formData.guests]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -150,6 +206,30 @@ export default function ReservationPage() {
     }
   };
 
+  // Helper function to display pre-order labels
+  const getPreOrderLabel = (type: 'drinks' | 'food', value: string): string => {
+    if (!value) return '';
+
+    // Find the item name from menu data
+    const categories = type === 'drinks' ? drinkCategories : foodCategories;
+    for (const items of Object.values(categories)) {
+      const item = items.find(i => i.id.toString() === value);
+      if (item) return item.name;
+    }
+
+    return value;
+  };
+
+  // Check if any pre-order was made
+  const hasPreOrder = formData.guestPreOrders.some(g => g.drinks || g.food) || formData.dietaryNotes;
+
+  // Handle guest pre-order change
+  const handleGuestPreOrderChange = (guestIndex: number, field: 'drinks' | 'food', value: string) => {
+    const newPreOrders = [...formData.guestPreOrders];
+    newPreOrders[guestIndex] = { ...newPreOrders[guestIndex], [field]: value };
+    setFormData(prev => ({ ...prev, guestPreOrders: newPreOrders }));
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
 
@@ -242,6 +322,11 @@ export default function ReservationPage() {
     setError('');
 
     try {
+      // Prepare pre-order data as JSON string
+      const preOrderData = hasPreOrder
+        ? JSON.stringify(formData.guestPreOrders.filter(g => g.drinks || g.food))
+        : undefined;
+
       const response = await reservationApi.create({
         customerName: formData.name,
         customerEmail: formData.email,
@@ -251,6 +336,8 @@ export default function ReservationPage() {
         numberOfGuests: parseInt(formData.guests),
         tableId: parseInt(formData.tableId),
         specialRequests: formData.specialRequests || undefined,
+        preOrderData: preOrderData,
+        dietaryNotes: formData.dietaryNotes || undefined,
       });
 
       if (response.success && response.data) {
@@ -523,6 +610,116 @@ export default function ReservationPage() {
                 />
               </div>
 
+              {/* Pre-Order Section */}
+              <div className="mt-4 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPreOrder(!showPreOrder)}
+                  className="flex items-center gap-2 text-sm font-semibold text-[#FF6B35] hover:text-[#e55a2b] transition-colors cursor-pointer"
+                >
+                  <svg
+                    className={`w-4 h-4 transition-transform ${showPreOrder ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Pre-order your meal (optional)
+                </button>
+
+                {showPreOrder && (
+                  <div className="mt-3 p-4 bg-[#F8F4F0] rounded-lg space-y-4">
+                    <p className="text-xs text-[#333333] opacity-70">
+                      Pre-order drinks and food for each guest. This helps us prepare for your visit.
+                    </p>
+
+                    {menuLoading ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#FF6B35] mx-auto"></div>
+                        <p className="text-xs text-gray-500 mt-2">Loading menu...</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Per-Guest Pre-Orders */}
+                        <div className="space-y-3">
+                          {formData.guestPreOrders.map((guestOrder, index) => (
+                            <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                              <p className="text-xs font-semibold text-[#FF6B35] mb-2">
+                                Guest {index + 1}
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                {/* Drinks */}
+                                <div>
+                                  <label className="block text-xs text-[#333333] mb-1">Drinks</label>
+                                  <select
+                                    value={guestOrder.drinks}
+                                    onChange={(e) => handleGuestPreOrderChange(index, 'drinks', e.target.value)}
+                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                                  >
+                                    <option value="">None</option>
+                                    {Object.entries(drinkCategories).map(([category, items]) => (
+                                      <optgroup key={category} label={category}>
+                                        {items.map((item) => (
+                                          <option key={item.id} value={item.id.toString()}>
+                                            {item.name}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Food */}
+                                <div>
+                                  <label className="block text-xs text-[#333333] mb-1">Food</label>
+                                  <select
+                                    value={guestOrder.food}
+                                    onChange={(e) => handleGuestPreOrderChange(index, 'food', e.target.value)}
+                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                                  >
+                                    <option value="">None</option>
+                                    {Object.entries(foodCategories).map(([category, items]) => (
+                                      <optgroup key={category} label={category}>
+                                        {items.map((item) => (
+                                          <option key={item.id} value={item.id.toString()}>
+                                            {item.name}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Dietary Notes */}
+                    <div>
+                      <label htmlFor="dietaryNotes" className="block text-xs font-semibold text-[#333333] mb-1">
+                        Dietary Notes (allergies, preferences for any guest)
+                      </label>
+                      <input
+                        type="text"
+                        id="dietaryNotes"
+                        name="dietaryNotes"
+                        value={formData.dietaryNotes}
+                        onChange={handleChange}
+                        placeholder="e.g., Guest 1: vegetarian, Guest 3: nut allergy"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333]"
+                      />
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      * Final menu selection will be made at the restaurant. Pre-orders help us prepare for your visit.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* Next Button */}
               <div className="mt-5 flex justify-center">
                 <button
@@ -612,6 +809,42 @@ export default function ReservationPage() {
                   )}
                 </div>
               </div>
+
+              {/* Pre-Order Details */}
+              {hasPreOrder && (
+                <div className="bg-[#FFF5F0] border border-[#FF6B35]/20 rounded-lg p-4">
+                  <h3 className="text-base font-bold text-[#333333] mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    Pre-Order
+                  </h3>
+
+                  {/* Per-Guest Pre-Orders */}
+                  <div className="space-y-2">
+                    {formData.guestPreOrders.map((guest, index) => (
+                      (guest.drinks || guest.food) && (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <span className="font-semibold text-[#FF6B35] min-w-[60px]">Guest {index + 1}:</span>
+                          <span className="text-[#333333]">
+                            {[
+                              guest.drinks && getPreOrderLabel('drinks', guest.drinks),
+                              guest.food && getPreOrderLabel('food', guest.food)
+                            ].filter(Boolean).join(' + ') || 'No pre-order'}
+                          </span>
+                        </div>
+                      )
+                    ))}
+                  </div>
+
+                  {formData.dietaryNotes && (
+                    <div className="mt-3 pt-3 border-t border-[#FF6B35]/20">
+                      <p className="text-xs text-[#333333] opacity-70">Dietary Notes</p>
+                      <p className="font-semibold text-sm text-[#333333]">{formData.dietaryNotes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Policy */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">

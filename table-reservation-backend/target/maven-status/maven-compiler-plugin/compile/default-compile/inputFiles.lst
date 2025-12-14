@@ -1,5 +1,6 @@
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\auth\ChangePasswordRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\controller\CustomerController.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\menu\UpdateMenuItemRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\table\AvailableTablesRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\TableShape.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\staff\StaffDTO.java
@@ -23,9 +24,12 @@ C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\c
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\staff\UpdateStaffRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\Staff.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\util\DtoMapper.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\menu\CreateMenuItemRequest.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\MenuItem.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\exception\BadRequestException.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\contact\ContactMessageDTO.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\user\UpdateProfileRequest.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\MenuItemType.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\auth\ResetPasswordRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\contact\CreateContactMessageRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\dashboard\DashboardStatsDTO.java
@@ -34,6 +38,7 @@ C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\c
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\auth\RegisterRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\QuickTableApplication.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\repository\StaffRepository.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\menu\MenuItemDTO.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\security\JwtTokenProvider.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\config\DataInitializer.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\reservation\CreateReservationRequest.java
@@ -56,6 +61,7 @@ C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\c
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\controller\StaffController.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\reservation\ReservationFilterRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\controller\AuthController.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\service\MenuItemService.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\reservation\UpdateReservationRequest.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\security\JwtAuthenticationEntryPoint.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\reservation\ReservationDTO.java
@@ -64,7 +70,9 @@ C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\c
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\dto\table\TableDTO.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\Reservation.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\exception\GlobalExceptionHandler.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\controller\MenuItemController.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\config\CorsConfig.java
+C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\repository\MenuItemRepository.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\config\SecurityConfig.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\entity\Notification.java
 C:\table_reservation\table_reservation\table-reservation-backend\src\main\java\com\quicktable\backend\config\OpenApiConfig.java
