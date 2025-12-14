@@ -1,3 +1,23 @@
+project overview
+The Restaurant Table Reservation System is a web-based application designed to simplify and automate the process of booking restaurant tables. The system allows customers to view table availability, make reservations, modify or cancel bookings, and receive notifications, while restaurant staff can efficiently manage tables, reservations, and menus through an admin interface.
+The project follows a structured Software Development Life Cycle (SDLC) approach to ensure quality, feasibility, and scalability.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 split terminal into 2 
 
 first part use 
