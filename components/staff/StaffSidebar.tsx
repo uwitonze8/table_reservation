@@ -60,7 +60,7 @@ export default function StaffSidebar() {
           </svg>
         ),
         path: '/staff/reports',
-        roles: ['manager'],
+        roles: ['manager', 'waiter'],
       },
     ];
 

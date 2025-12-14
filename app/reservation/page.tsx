@@ -4,12 +4,18 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import TableLayout, { Table } from '@/components/reservation/TableLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { reservationApi, tableApi } from '@/lib/api';
+import { reservationApi, tableApi, menuApi, MenuItem } from '@/lib/api';
 
 export default function ReservationPage() {
   const router = useRouter();
   const { user, isLoggedIn } = useAuth();
   const [step, setStep] = useState(1);
+  // Type for guest pre-order
+  type GuestPreOrder = {
+    drinks: string;
+    food: string;
+  };
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -20,7 +26,57 @@ export default function ReservationPage() {
     specialRequests: '',
     tableId: '',
     tableName: '',
+    // Pre-order fields
+    guestPreOrders: [] as GuestPreOrder[],
+    dietaryNotes: '',
   });
+
+  const [showPreOrder, setShowPreOrder] = useState(false);
+
+  // Menu items from API
+  const [drinkCategories, setDrinkCategories] = useState<Record<string, MenuItem[]>>({});
+  const [foodCategories, setFoodCategories] = useState<Record<string, MenuItem[]>>({});
+  const [menuLoading, setMenuLoading] = useState(true);
+
+  // Fetch menu items on mount
+  useEffect(() => {
+    const fetchMenuItems = async () => {
+      try {
+        const [drinksRes, foodRes] = await Promise.all([
+          menuApi.getDrinksGrouped(),
+          menuApi.getFoodGrouped(),
+        ]);
+
+        if (drinksRes.success && drinksRes.data) {
+          setDrinkCategories(drinksRes.data);
+        }
+        if (foodRes.success && foodRes.data) {
+          setFoodCategories(foodRes.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch menu items:', err);
+      } finally {
+        setMenuLoading(false);
+      }
+    };
+
+    fetchMenuItems();
+  }, []);
+
+  // Initialize guest pre-orders when guest count changes
+  useEffect(() => {
+    const guestCount = parseInt(formData.guests);
+    const currentLength = formData.guestPreOrders.length;
+
+    if (guestCount !== currentLength) {
+      const newPreOrders: GuestPreOrder[] = [];
+      for (let i = 0; i < guestCount; i++) {
+        // Preserve existing selections if available
+        newPreOrders.push(formData.guestPreOrders[i] || { drinks: '', food: '' });
+      }
+      setFormData(prev => ({ ...prev, guestPreOrders: newPreOrders }));
+    }
+  }, [formData.guests]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -46,10 +102,175 @@ export default function ReservationPage() {
     }
   }, [isLoggedIn, router]);
 
+  // Convert 12-hour time to minutes from midnight for comparison
+  const timeToMinutes = (time12h: string): number => {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':').map(Number);
+
+    if (modifier === 'PM' && hours !== 12) {
+      hours += 12;
+    }
+    if (modifier === 'AM' && hours === 12) {
+      hours = 0;
+    }
+
+    return hours * 60 + minutes;
+  };
+
+  // Get time slots based on day of the week
+  // Opening Hours:
+  // Monday - Friday: 5:00 AM - 11:00 PM
+  // Saturday: 5:00 AM - 2:00 AM (next day)
+  // Sunday: 11:30 AM - 9:00 PM
+  const getTimeSlotsForDay = (dateString: string): string[] => {
+    if (!dateString) return [];
+
+    const date = new Date(dateString + 'T00:00:00');
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+    // Generate time slots in 30-minute intervals
+    const generateSlots = (startHour: number, startMin: number, endHour: number, endMin: number): string[] => {
+      const slots: string[] = [];
+      let hour = startHour;
+      let min = startMin;
+
+      while (hour < endHour || (hour === endHour && min <= endMin)) {
+        // Don't add slots too close to closing time (need at least 1 hour before close)
+        const currentMinutes = hour * 60 + min;
+        const closingMinutes = endHour * 60 + endMin;
+        if (closingMinutes - currentMinutes < 60) break;
+
+        // Convert to 12-hour format
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        const ampm = hour < 12 ? 'AM' : 'PM';
+        const timeStr = `${displayHour}:${min.toString().padStart(2, '0')} ${ampm}`;
+        slots.push(timeStr);
+
+        // Increment by 30 minutes
+        min += 30;
+        if (min >= 60) {
+          min = 0;
+          hour++;
+        }
+      }
+
+      return slots;
+    };
+
+    switch (dayOfWeek) {
+      case 0: // Sunday: 11:30 AM - 9:00 PM
+        return generateSlots(11, 30, 21, 0);
+      case 6: // Saturday: 5:00 AM - 2:00 AM (we'll limit to midnight for same-day booking)
+        return generateSlots(5, 0, 24, 0);
+      default: // Monday - Friday: 5:00 AM - 11:00 PM
+        return generateSlots(5, 0, 23, 0);
+    }
+  };
+
+  // Get available time slots based on selected date
+  const getAvailableTimeSlots = (): string[] => {
+    const daySlots = getTimeSlotsForDay(formData.date);
+    const today = new Date().toISOString().split('T')[0];
+
+    // If not today, return all time slots for that day
+    if (formData.date !== today) {
+      return daySlots;
+    }
+
+    // If today, filter out past times (only show future time slots)
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return daySlots.filter(slot => timeToMinutes(slot) > currentMinutes);
+  };
+
+  const availableTimeSlots = getAvailableTimeSlots();
+
+  // Get day name for display
+  const getDayName = (dateString: string): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  };
+
+  // Get opening hours text for the selected day
+  const getOpeningHoursText = (): string => {
+    if (!formData.date) return '';
+    const date = new Date(formData.date + 'T00:00:00');
+    const dayOfWeek = date.getDay();
+
+    switch (dayOfWeek) {
+      case 0: return 'Sunday: 11:30 AM - 9:00 PM';
+      case 6: return 'Saturday: 5:00 AM - 2:00 AM';
+      default: return 'Mon-Fri: 5:00 AM - 11:00 PM';
+    }
+  };
+
+  // Helper function to display pre-order labels
+  const getPreOrderLabel = (type: 'drinks' | 'food', value: string): string => {
+    if (!value) return '';
+
+    // Find the item name from menu data
+    const categories = type === 'drinks' ? drinkCategories : foodCategories;
+    for (const items of Object.values(categories)) {
+      const item = items.find(i => i.id.toString() === value);
+      if (item) return item.name;
+    }
+
+    return value;
+  };
+
+  // Check if any pre-order was made
+  const hasPreOrder = formData.guestPreOrders.some(g => g.drinks || g.food) || formData.dietaryNotes;
+
+  // Handle guest pre-order change
+  const handleGuestPreOrderChange = (guestIndex: number, field: 'drinks' | 'food', value: string) => {
+    const newPreOrders = [...formData.guestPreOrders];
+    newPreOrders[guestIndex] = { ...newPreOrders[guestIndex], [field]: value };
+    setFormData(prev => ({ ...prev, guestPreOrders: newPreOrders }));
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+
+    // If date changed, check if currently selected time is still valid
+    if (name === 'date') {
+      const today = new Date().toISOString().split('T')[0];
+      const newDaySlots = getTimeSlotsForDay(value);
+
+      // Check if current time selection exists in the new day's slots
+      let shouldResetTime = false;
+
+      if (formData.time) {
+        // Check if the selected time exists in the new day's available slots
+        const timeExistsInNewDay = newDaySlots.includes(formData.time);
+
+        if (!timeExistsInNewDay) {
+          shouldResetTime = true;
+        } else if (value === today) {
+          // If today, also check if time hasn't passed
+          const now = new Date();
+          const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+          if (timeToMinutes(formData.time) <= currentMinutes) {
+            shouldResetTime = true;
+          }
+        }
+      }
+
+      if (shouldResetTime) {
+        setFormData({
+          ...formData,
+          date: value,
+          time: '',
+        });
+        return;
+      }
+    }
+
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
   };
 
@@ -101,6 +322,11 @@ export default function ReservationPage() {
     setError('');
 
     try {
+      // Prepare pre-order data as JSON string
+      const preOrderData = hasPreOrder
+        ? JSON.stringify(formData.guestPreOrders.filter(g => g.drinks || g.food))
+        : undefined;
+
       const response = await reservationApi.create({
         customerName: formData.name,
         customerEmail: formData.email,
@@ -110,6 +336,8 @@ export default function ReservationPage() {
         numberOfGuests: parseInt(formData.guests),
         tableId: parseInt(formData.tableId),
         specialRequests: formData.specialRequests || undefined,
+        preOrderData: preOrderData,
+        dietaryNotes: formData.dietaryNotes || undefined,
       });
 
       if (response.success && response.data) {
@@ -143,7 +371,7 @@ export default function ReservationPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8F4F0] py-6 px-4 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-[#F8F4F0] pt-20 pb-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="text-center mb-4">
@@ -345,27 +573,24 @@ export default function ReservationPage() {
                     value={formData.time}
                     onChange={handleChange}
                     required
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                    disabled={!formData.date}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    <option value="">Select Time</option>
-                    <option value="11:00 AM">11:00 AM</option>
-                    <option value="11:30 AM">11:30 AM</option>
-                    <option value="12:00 PM">12:00 PM</option>
-                    <option value="12:30 PM">12:30 PM</option>
-                    <option value="1:00 PM">1:00 PM</option>
-                    <option value="1:30 PM">1:30 PM</option>
-                    <option value="2:00 PM">2:00 PM</option>
-                    <option value="5:00 PM">5:00 PM</option>
-                    <option value="5:30 PM">5:30 PM</option>
-                    <option value="6:00 PM">6:00 PM</option>
-                    <option value="6:30 PM">6:30 PM</option>
-                    <option value="7:00 PM">7:00 PM</option>
-                    <option value="7:30 PM">7:30 PM</option>
-                    <option value="8:00 PM">8:00 PM</option>
-                    <option value="8:30 PM">8:30 PM</option>
-                    <option value="9:00 PM">9:00 PM</option>
-                    <option value="9:30 PM">9:30 PM</option>
+                    <option value="">{!formData.date ? 'Select date first' : 'Select Time'}</option>
+                    {availableTimeSlots.map((slot) => (
+                      <option key={slot} value={slot}>
+                        {slot}
+                      </option>
+                    ))}
                   </select>
+                  {formData.date && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {getOpeningHoursText()}
+                    </p>
+                  )}
+                  {formData.date === new Date().toISOString().split('T')[0] && availableTimeSlots.length === 0 && (
+                    <p className="text-xs text-red-500 mt-1">No available times left for today. Please select another date.</p>
+                  )}
                 </div>
               </div>
 
@@ -383,6 +608,116 @@ export default function ReservationPage() {
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] resize-none"
                   placeholder="Dietary restrictions, occasion, etc."
                 />
+              </div>
+
+              {/* Pre-Order Section */}
+              <div className="mt-4 md:col-span-2">
+                <button
+                  type="button"
+                  onClick={() => setShowPreOrder(!showPreOrder)}
+                  className="flex items-center gap-2 text-sm font-semibold text-[#FF6B35] hover:text-[#e55a2b] transition-colors cursor-pointer"
+                >
+                  <svg
+                    className={`w-4 h-4 transition-transform ${showPreOrder ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                  Pre-order your meal (optional)
+                </button>
+
+                {showPreOrder && (
+                  <div className="mt-3 p-4 bg-[#F8F4F0] rounded-lg space-y-4">
+                    <p className="text-xs text-[#333333] opacity-70">
+                      Pre-order drinks and food for each guest. This helps us prepare for your visit.
+                    </p>
+
+                    {menuLoading ? (
+                      <div className="text-center py-4">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#FF6B35] mx-auto"></div>
+                        <p className="text-xs text-gray-500 mt-2">Loading menu...</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Per-Guest Pre-Orders */}
+                        <div className="space-y-3">
+                          {formData.guestPreOrders.map((guestOrder, index) => (
+                            <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                              <p className="text-xs font-semibold text-[#FF6B35] mb-2">
+                                Guest {index + 1}
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                {/* Drinks */}
+                                <div>
+                                  <label className="block text-xs text-[#333333] mb-1">Drinks</label>
+                                  <select
+                                    value={guestOrder.drinks}
+                                    onChange={(e) => handleGuestPreOrderChange(index, 'drinks', e.target.value)}
+                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                                  >
+                                    <option value="">None</option>
+                                    {Object.entries(drinkCategories).map(([category, items]) => (
+                                      <optgroup key={category} label={category}>
+                                        {items.map((item) => (
+                                          <option key={item.id} value={item.id.toString()}>
+                                            {item.name}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Food */}
+                                <div>
+                                  <label className="block text-xs text-[#333333] mb-1">Food</label>
+                                  <select
+                                    value={guestOrder.food}
+                                    onChange={(e) => handleGuestPreOrderChange(index, 'food', e.target.value)}
+                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] bg-white"
+                                  >
+                                    <option value="">None</option>
+                                    {Object.entries(foodCategories).map(([category, items]) => (
+                                      <optgroup key={category} label={category}>
+                                        {items.map((item) => (
+                                          <option key={item.id} value={item.id.toString()}>
+                                            {item.name}
+                                          </option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Dietary Notes */}
+                    <div>
+                      <label htmlFor="dietaryNotes" className="block text-xs font-semibold text-[#333333] mb-1">
+                        Dietary Notes (allergies, preferences for any guest)
+                      </label>
+                      <input
+                        type="text"
+                        id="dietaryNotes"
+                        name="dietaryNotes"
+                        value={formData.dietaryNotes}
+                        onChange={handleChange}
+                        placeholder="e.g., Guest 1: vegetarian, Guest 3: nut allergy"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333]"
+                      />
+                    </div>
+
+                    <p className="text-xs text-gray-500">
+                      * Final menu selection will be made at the restaurant. Pre-orders help us prepare for your visit.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Next Button */}
@@ -474,6 +809,42 @@ export default function ReservationPage() {
                   )}
                 </div>
               </div>
+
+              {/* Pre-Order Details */}
+              {hasPreOrder && (
+                <div className="bg-[#FFF5F0] border border-[#FF6B35]/20 rounded-lg p-4">
+                  <h3 className="text-base font-bold text-[#333333] mb-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                    </svg>
+                    Pre-Order
+                  </h3>
+
+                  {/* Per-Guest Pre-Orders */}
+                  <div className="space-y-2">
+                    {formData.guestPreOrders.map((guest, index) => (
+                      (guest.drinks || guest.food) && (
+                        <div key={index} className="flex items-center gap-2 text-sm">
+                          <span className="font-semibold text-[#FF6B35] min-w-[60px]">Guest {index + 1}:</span>
+                          <span className="text-[#333333]">
+                            {[
+                              guest.drinks && getPreOrderLabel('drinks', guest.drinks),
+                              guest.food && getPreOrderLabel('food', guest.food)
+                            ].filter(Boolean).join(' + ') || 'No pre-order'}
+                          </span>
+                        </div>
+                      )
+                    ))}
+                  </div>
+
+                  {formData.dietaryNotes && (
+                    <div className="mt-3 pt-3 border-t border-[#FF6B35]/20">
+                      <p className="text-xs text-[#333333] opacity-70">Dietary Notes</p>
+                      <p className="font-semibold text-sm text-[#333333]">{formData.dietaryNotes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Policy */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">

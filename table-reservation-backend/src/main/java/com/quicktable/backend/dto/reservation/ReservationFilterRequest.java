@@ -20,6 +20,6 @@ public class ReservationFilterRequest {
     private String search;
     private Integer page = 0;
     private Integer size = 10;
-    private String sortBy = "reservationDate";
+    private String sortBy = "createdAt";
     private String sortDirection = "DESC";
 }

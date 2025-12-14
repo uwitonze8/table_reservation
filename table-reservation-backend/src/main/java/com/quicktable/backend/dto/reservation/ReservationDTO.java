@@ -32,6 +32,8 @@ public class ReservationDTO {
     private String tableName;
     private Integer tableNumber;
     private String tableLocation;
+    private String preOrderData;
+    private String dietaryNotes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

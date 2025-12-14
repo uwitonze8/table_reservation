@@ -46,6 +46,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/contact").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/tables").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/tables/available").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/menu/available").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/menu/drinks/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/menu/food/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/menu/categories/**").permitAll()
 
                         // Swagger
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

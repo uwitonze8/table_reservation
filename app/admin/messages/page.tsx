@@ -12,6 +12,33 @@ export default function AdminMessagesPage() {
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
   const [replyText, setReplyText] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<ContactMessage | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  const openDeleteModal = (message: ContactMessage) => {
+    setMessageToDelete(message);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setMessageToDelete(null);
+  };
 
   useEffect(() => {
     fetchMessages();
@@ -77,33 +104,35 @@ export default function AdminMessagesPage() {
         await fetchMessages();
         setSelectedMessage(null);
         setReplyText('');
-        alert('Reply sent successfully!');
+        showNotification('success', 'Reply Sent', 'Your reply has been sent successfully.');
       } else {
-        alert(response.message || 'Failed to send reply');
+        showNotification('error', 'Failed to Send', response.message || 'Failed to send reply');
       }
     } catch (err) {
-      alert('Failed to send reply. Please try again.');
+      showNotification('error', 'Error', 'Failed to send reply. Please try again.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDelete = async (messageId: number) => {
-    if (!confirm('Are you sure you want to delete this message?')) return;
+  const handleDelete = async () => {
+    if (!messageToDelete) return;
 
     try {
-      setActionLoading(true);
-      const response = await adminApi.deleteMessage(messageId);
+      setDeleteLoading(true);
+      const response = await adminApi.deleteMessage(messageToDelete.id);
       if (response.success) {
         await fetchMessages();
         setSelectedMessage(null);
+        closeDeleteModal();
+        showNotification('success', 'Message Deleted', 'The message has been deleted successfully.');
       } else {
-        alert(response.message || 'Failed to delete message');
+        showNotification('error', 'Delete Failed', response.message || 'Failed to delete message');
       }
     } catch (err) {
-      alert('Failed to delete message. Please try again.');
+      showNotification('error', 'Error', 'Failed to delete message. Please try again.');
     } finally {
-      setActionLoading(false);
+      setDeleteLoading(false);
     }
   };
 
@@ -195,7 +224,7 @@ export default function AdminMessagesPage() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                  className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                     filter === f
                       ? 'bg-[#FF6B35] text-white'
                       : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -270,8 +299,8 @@ export default function AdminMessagesPage() {
 
       {/* Message Detail Modal */}
       {selectedMessage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 cursor-pointer" onClick={() => setSelectedMessage(null)}>
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto cursor-default" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-gray-200 flex justify-between items-start sticky top-0 bg-white">
               <div>
                 <h2 className="text-xl font-bold text-[#333333]">Message Details</h2>
@@ -281,7 +310,7 @@ export default function AdminMessagesPage() {
               </div>
               <button
                 onClick={() => setSelectedMessage(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -355,25 +384,117 @@ export default function AdminMessagesPage() {
                   <button
                     onClick={handleReply}
                     disabled={actionLoading || !replyText.trim()}
-                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50"
+                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {actionLoading ? 'Sending...' : 'Send Reply'}
                   </button>
                 )}
                 <button
-                  onClick={() => handleDelete(selectedMessage.id)}
+                  onClick={() => openDeleteModal(selectedMessage)}
                   disabled={actionLoading}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   Delete Message
                 </button>
                 <button
                   onClick={() => setSelectedMessage(null)}
-                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
                 >
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && messageToDelete && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">Delete Message</h2>
+              <button onClick={closeDeleteModal} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-2">
+                Are you sure you want to delete this message from
+              </p>
+              <p className="text-sm font-semibold text-[#333333] text-center mb-4">
+                {messageToDelete.fullName || `${messageToDelete.firstName} ${messageToDelete.lastName}`}?
+              </p>
+              <p className="text-xs text-gray-500 text-center mb-6">
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">{notificationModal.title}</h2>
+              <button onClick={closeNotification} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className={`flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-6">{notificationModal.message}</p>
+              <button
+                onClick={closeNotification}
+                className={`w-full px-4 py-2 text-sm rounded-lg font-semibold transition-colors cursor-pointer ${
+                  notificationModal.type === 'success'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

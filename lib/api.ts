@@ -384,6 +384,81 @@ export const adminApi = {
   },
 };
 
+// ==================== MENU API ====================
+export const menuApi = {
+  // Public endpoints
+  getAvailableMenuItems: async () => {
+    return apiRequest<MenuItem[]>('/menu/available');
+  },
+
+  getDrinks: async () => {
+    return apiRequest<MenuItem[]>('/menu/drinks');
+  },
+
+  getFood: async () => {
+    return apiRequest<MenuItem[]>('/menu/food');
+  },
+
+  getDrinksGrouped: async () => {
+    return apiRequest<Record<string, MenuItem[]>>('/menu/drinks/grouped');
+  },
+
+  getFoodGrouped: async () => {
+    return apiRequest<Record<string, MenuItem[]>>('/menu/food/grouped');
+  },
+
+  getDrinkCategories: async () => {
+    return apiRequest<string[]>('/menu/categories/drinks');
+  },
+
+  getFoodCategories: async () => {
+    return apiRequest<string[]>('/menu/categories/food');
+  },
+
+  // Admin endpoints
+  getAllMenuItems: async () => {
+    return apiRequest<MenuItem[]>('/menu/admin/all');
+  },
+
+  getAllDrinks: async () => {
+    return apiRequest<MenuItem[]>('/menu/admin/drinks');
+  },
+
+  getAllFood: async () => {
+    return apiRequest<MenuItem[]>('/menu/admin/food');
+  },
+
+  getMenuItemById: async (id: number) => {
+    return apiRequest<MenuItem>(`/menu/admin/${id}`);
+  },
+
+  createMenuItem: async (data: CreateMenuItemData) => {
+    return apiRequest<MenuItem>('/menu/admin', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateMenuItem: async (id: number, data: UpdateMenuItemData) => {
+    return apiRequest<MenuItem>(`/menu/admin/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  toggleAvailability: async (id: number) => {
+    return apiRequest<MenuItem>(`/menu/admin/${id}/toggle-availability`, {
+      method: 'PATCH',
+    });
+  },
+
+  deleteMenuItem: async (id: number) => {
+    return apiRequest(`/menu/admin/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
 // ==================== STAFF API ====================
 export const staffApi = {
   getTodayReservations: async () => {
@@ -476,6 +551,8 @@ export interface Reservation {
   reservationTime: string;
   numberOfGuests: number;
   specialRequests?: string;
+  preOrderData?: string;
+  dietaryNotes?: string;
   status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
   loyaltyPointsEarned: number;
   tableId: number;
@@ -495,6 +572,8 @@ export interface CreateReservationData {
   numberOfGuests: number;
   tableId: number;
   specialRequests?: string;
+  preOrderData?: string;
+  dietaryNotes?: string;
 }
 
 export interface Table {
@@ -633,4 +712,37 @@ export interface ReportData {
     dayName: string;
     bookings: number;
   }>;
+}
+
+export interface MenuItem {
+  id: number;
+  type: 'DRINK' | 'FOOD';
+  category: string;
+  name: string;
+  description?: string;
+  price?: number;
+  available: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMenuItemData {
+  type: 'DRINK' | 'FOOD';
+  category: string;
+  name: string;
+  description?: string;
+  price?: number;
+  available?: boolean;
+  sortOrder?: number;
+}
+
+export interface UpdateMenuItemData {
+  type?: 'DRINK' | 'FOOD';
+  category?: string;
+  name?: string;
+  description?: string;
+  price?: number;
+  available?: boolean;
+  sortOrder?: number;
 }

@@ -11,6 +11,32 @@ export default function StaffReservationsPage() {
   const [filter, setFilter] = useState('all');
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [reservationToCancel, setReservationToCancel] = useState<Reservation | null>(null);
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  const openCancelModal = (reservation: Reservation) => {
+    setReservationToCancel(reservation);
+    setCancelModalOpen(true);
+  };
+
+  const closeCancelModal = () => {
+    setCancelModalOpen(false);
+    setReservationToCancel(null);
+  };
 
   useEffect(() => {
     fetchReservations();
@@ -56,11 +82,12 @@ export default function StaffReservationsPage() {
       if (response.success) {
         await fetchReservations();
         setSelectedReservation(null);
+        showNotification('success', 'Reservation Confirmed', 'The reservation has been confirmed successfully.');
       } else {
-        alert(response.message || 'Failed to confirm reservation');
+        showNotification('error', 'Confirmation Failed', response.message || 'Failed to confirm reservation');
       }
     } catch (err) {
-      alert('Failed to confirm reservation');
+      showNotification('error', 'Error', 'Failed to confirm reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -73,29 +100,32 @@ export default function StaffReservationsPage() {
       if (response.success) {
         await fetchReservations();
         setSelectedReservation(null);
+        showNotification('success', 'Reservation Completed', 'The reservation has been marked as completed.');
       } else {
-        alert(response.message || 'Failed to complete reservation');
+        showNotification('error', 'Completion Failed', response.message || 'Failed to complete reservation');
       }
     } catch (err) {
-      alert('Failed to complete reservation');
+      showNotification('error', 'Error', 'Failed to complete reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleCancelReservation = async (id: number) => {
-    if (!confirm('Are you sure you want to cancel this reservation?')) return;
+  const handleCancelReservation = async () => {
+    if (!reservationToCancel) return;
     try {
       setActionLoading(true);
-      const response = await staffApi.cancelReservation(id, 'Cancelled by staff');
+      const response = await staffApi.cancelReservation(reservationToCancel.id, 'Cancelled by staff');
       if (response.success) {
         await fetchReservations();
         setSelectedReservation(null);
+        closeCancelModal();
+        showNotification('success', 'Reservation Cancelled', 'The reservation has been cancelled successfully.');
       } else {
-        alert(response.message || 'Failed to cancel reservation');
+        showNotification('error', 'Cancellation Failed', response.message || 'Failed to cancel reservation');
       }
     } catch (err) {
-      alert('Failed to cancel reservation');
+      showNotification('error', 'Error', 'Failed to cancel reservation. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -290,7 +320,7 @@ export default function StaffReservationsPage() {
 
       {/* Reservation Details Modal */}
       {selectedReservation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <div>
@@ -366,7 +396,7 @@ export default function StaffReservationsPage() {
                 )}
                 {(selectedReservation.status === 'PENDING' || selectedReservation.status === 'CONFIRMED') && (
                   <button
-                    onClick={() => handleCancelReservation(selectedReservation.id)}
+                    onClick={() => openCancelModal(selectedReservation)}
                     disabled={actionLoading}
                     className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
                   >
@@ -381,6 +411,81 @@ export default function StaffReservationsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {cancelModalOpen && reservationToCancel && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#333333]">Cancel Reservation</h3>
+                <p className="text-sm text-[#333333] opacity-70">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-[#333333] mb-6">
+              Are you sure you want to cancel the reservation for <strong>{reservationToCancel.customerName}</strong> ({reservationToCancel.reservationCode})?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={closeCancelModal}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-[#333333] bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Keep Reservation
+              </button>
+              <button
+                onClick={handleCancelReservation}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {actionLoading ? 'Cancelling...' : 'Yes, Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mr-4 ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#333333]">{notificationModal.title}</h3>
+              </div>
+            </div>
+            <p className="text-sm text-[#333333] mb-6">{notificationModal.message}</p>
+            <button
+              onClick={closeNotification}
+              className={`w-full px-4 py-2 text-sm font-semibold text-white rounded-lg transition-colors ${
+                notificationModal.type === 'success'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
+            >
+              OK
+            </button>
           </div>
         </div>
       )}

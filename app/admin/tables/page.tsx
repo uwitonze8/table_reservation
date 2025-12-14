@@ -19,6 +19,33 @@ export default function AdminTablesPage() {
     shape: 'SQUARE',
   });
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  const openDeleteModal = (table: Table) => {
+    setTableToDelete(table);
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setTableToDelete(null);
+  };
 
   // Fetch tables from API
   useEffect(() => {
@@ -90,11 +117,12 @@ export default function AdminTablesPage() {
         await fetchTables();
         setShowAddModal(false);
         setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
+        showNotification('success', 'Table Added', 'New table has been added successfully.');
       } else {
-        alert(response.message || 'Failed to add table');
+        showNotification('error', 'Failed to Add', response.message || 'Failed to add table');
       }
     } catch (err) {
-      alert('Failed to add table. Please try again.');
+      showNotification('error', 'Error', 'Failed to add table. Please try again.');
     } finally {
       setActionLoading(false);
     }
@@ -108,33 +136,36 @@ export default function AdminTablesPage() {
       if (response.success) {
         await fetchTables();
         setSelectedTable(null);
+        showNotification('success', 'Status Updated', 'Table status has been updated successfully.');
       } else {
-        alert(response.message || 'Failed to update table status');
+        showNotification('error', 'Update Failed', response.message || 'Failed to update table status');
       }
     } catch (err) {
-      alert('Failed to update table status. Please try again.');
+      showNotification('error', 'Error', 'Failed to update table status. Please try again.');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeleteTable = async (tableId: number) => {
-    if (!confirm('Are you sure you want to delete this table?')) return;
+  const handleDeleteTable = async () => {
+    if (!tableToDelete) return;
 
     try {
-      setActionLoading(true);
-      const response = await adminApi.deleteTable(tableId);
+      setDeleteLoading(true);
+      const response = await adminApi.deleteTable(tableToDelete.id);
 
       if (response.success) {
         await fetchTables();
         setSelectedTable(null);
+        closeDeleteModal();
+        showNotification('success', 'Table Deleted', 'Table has been deleted successfully.');
       } else {
-        alert(response.message || 'Failed to delete table');
+        showNotification('error', 'Delete Failed', response.message || 'Failed to delete table');
       }
     } catch (err) {
-      alert('Failed to delete table. Please try again.');
+      showNotification('error', 'Error', 'Failed to delete table. Please try again.');
     } finally {
-      setActionLoading(false);
+      setDeleteLoading(false);
     }
   };
 
@@ -166,7 +197,7 @@ export default function AdminTablesPage() {
             {error}
             <button
               onClick={fetchTables}
-              className="ml-4 text-red-700 underline hover:no-underline"
+              className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
             >
               Retry
             </button>
@@ -193,7 +224,7 @@ export default function AdminTablesPage() {
               </div>
               <button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold"
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold cursor-pointer"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
@@ -231,7 +262,7 @@ export default function AdminTablesPage() {
                 <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => setFilter('all')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'all'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -241,7 +272,7 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => setFilter('available')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'available'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -251,7 +282,7 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => setFilter('occupied')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'occupied'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -261,7 +292,7 @@ export default function AdminTablesPage() {
                   </button>
                   <button
                     onClick={() => setFilter('maintenance')}
-                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-2 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                       filter === 'maintenance'
                         ? 'bg-[#FF6B35] text-white'
                         : 'bg-gray-100 text-[#333333] hover:bg-gray-200'
@@ -276,7 +307,7 @@ export default function AdminTablesPage() {
                 <select
                   value={locationFilter}
                   onChange={(e) => setLocationFilter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                 >
                   <option value="all">All Locations</option>
                   {locations.map(location => (
@@ -342,13 +373,13 @@ export default function AdminTablesPage() {
 
       {/* Table Details Modal */}
       {selectedTable && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h2 className="text-xl font-bold text-[#333333]">Table #{selectedTable.tableNumber}</h2>
               <button
                 onClick={() => setSelectedTable(null)}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -377,21 +408,21 @@ export default function AdminTablesPage() {
                     <button
                       onClick={() => handleUpdateStatus(selectedTable.id, 'AVAILABLE')}
                       disabled={actionLoading}
-                      className="px-3 py-2 text-xs bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
+                      className="px-3 py-2 text-xs bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                     >
                       Set Available
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(selectedTable.id, 'OCCUPIED')}
                       disabled={actionLoading}
-                      className="px-3 py-2 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                      className="px-3 py-2 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                     >
                       Set Occupied
                     </button>
                     <button
                       onClick={() => handleUpdateStatus(selectedTable.id, 'MAINTENANCE')}
                       disabled={actionLoading}
-                      className="px-3 py-2 text-xs bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 col-span-2"
+                      className="px-3 py-2 text-xs bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors disabled:opacity-50 col-span-2 cursor-pointer disabled:cursor-not-allowed"
                     >
                       Set Maintenance
                     </button>
@@ -400,9 +431,9 @@ export default function AdminTablesPage() {
               </div>
               <div className="flex gap-2 mt-6">
                 <button
-                  onClick={() => handleDeleteTable(selectedTable.id)}
+                  onClick={() => openDeleteModal(selectedTable)}
                   disabled={actionLoading}
-                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                 >
                   Delete Table
                 </button>
@@ -414,7 +445,7 @@ export default function AdminTablesPage() {
 
       {/* Add Table Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center">
               <h2 className="text-xl font-bold text-[#333333]">Add New Table</h2>
@@ -423,7 +454,7 @@ export default function AdminTablesPage() {
                   setShowAddModal(false);
                   setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
                 }}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -476,7 +507,7 @@ export default function AdminTablesPage() {
                     required
                     value={newTable.location}
                     onChange={(e) => setNewTable({ ...newTable, location: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                   >
                     <option value="WINDOW">Window</option>
                     <option value="CENTER">Center</option>
@@ -495,7 +526,7 @@ export default function AdminTablesPage() {
                     required
                     value={newTable.shape}
                     onChange={(e) => setNewTable({ ...newTable, shape: e.target.value })}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                   >
                     <option value="SQUARE">Square</option>
                     <option value="ROUND">Round</option>
@@ -511,19 +542,111 @@ export default function AdminTablesPage() {
                       setShowAddModal(false);
                       setNewTable({ tableNumber: '', capacity: '', location: 'WINDOW', shape: 'SQUARE' });
                     }}
-                    className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                    className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={actionLoading}
-                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50"
+                    className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {actionLoading ? 'Adding...' : 'Add Table'}
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && tableToDelete && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">Delete Table</h2>
+              <button onClick={closeDeleteModal} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-2">
+                Are you sure you want to delete
+              </p>
+              <p className="text-sm font-semibold text-[#333333] text-center mb-4">
+                Table #{tableToDelete.tableNumber}?
+              </p>
+              <p className="text-xs text-gray-500 text-center mb-6">
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeDeleteModal}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTable}
+                  disabled={deleteLoading}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleteLoading ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">{notificationModal.title}</h2>
+              <button onClick={closeNotification} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className={`flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-6">{notificationModal.message}</p>
+              <button
+                onClick={closeNotification}
+                className={`w-full px-4 py-2 text-sm rounded-lg font-semibold transition-colors cursor-pointer ${
+                  notificationModal.type === 'success'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                OK
+              </button>
             </div>
           </div>
         </div>

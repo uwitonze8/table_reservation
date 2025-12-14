@@ -1,6 +1,7 @@
 package com.quicktable.backend.util;
 
 import com.quicktable.backend.dto.contact.ContactMessageDTO;
+import com.quicktable.backend.dto.menu.MenuItemDTO;
 import com.quicktable.backend.dto.reservation.ReservationDTO;
 import com.quicktable.backend.dto.staff.StaffDTO;
 import com.quicktable.backend.dto.table.TableDTO;
@@ -55,6 +56,8 @@ public class DtoMapper {
                 .tableName(reservation.getTable().getTableName())
                 .tableNumber(reservation.getTable().getTableNumber())
                 .tableLocation(reservation.getTable().getLocation().name())
+                .preOrderData(reservation.getPreOrderData())
+                .dietaryNotes(reservation.getDietaryNotes())
                 .createdAt(reservation.getCreatedAt())
                 .updatedAt(reservation.getUpdatedAt())
                 .build();
@@ -103,6 +106,21 @@ public class DtoMapper {
                 .replyMessage(message.getReplyMessage())
                 .repliedAt(message.getRepliedAt())
                 .createdAt(message.getCreatedAt())
+                .build();
+    }
+
+    public MenuItemDTO toMenuItemDTO(MenuItem item) {
+        return MenuItemDTO.builder()
+                .id(item.getId())
+                .type(item.getType())
+                .category(item.getCategory())
+                .name(item.getName())
+                .description(item.getDescription())
+                .price(item.getPrice())
+                .available(item.getAvailable())
+                .sortOrder(item.getSortOrder())
+                .createdAt(item.getCreatedAt())
+                .updatedAt(item.getUpdatedAt())
                 .build();
     }
 }

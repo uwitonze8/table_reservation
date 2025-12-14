@@ -74,6 +74,32 @@ export default function MyReservationsPage() {
   const [availableTables, setAvailableTables] = useState<Table[]>([]);
   const [modifyLoading, setModifyLoading] = useState(false);
   const [tablesLoading, setTablesLoading] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [reservationToCancel, setReservationToCancel] = useState<DisplayReservation | null>(null);
+  const [notificationModal, setNotificationModal] = useState<{
+    show: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
+
+  const showNotification = (type: 'success' | 'error', title: string, message: string) => {
+    setNotificationModal({ show: true, type, title, message });
+  };
+
+  const closeNotification = () => {
+    setNotificationModal({ show: false, type: 'success', title: '', message: '' });
+  };
+
+  const openCancelModal = (reservation: DisplayReservation) => {
+    setReservationToCancel(reservation);
+    setCancelModalOpen(true);
+  };
+
+  const closeCancelModal = () => {
+    setCancelModalOpen(false);
+    setReservationToCancel(null);
+  };
 
   // Redirect if not logged in
   useEffect(() => {
@@ -162,26 +188,26 @@ export default function MyReservationsPage() {
     router.push(`/reservation?rebook=${reservation.id}`);
   };
 
-  const handleCancel = async (reservationId: string) => {
-    if (!confirm('Are you sure you want to cancel this reservation?')) {
-      return;
-    }
+  const handleCancel = async () => {
+    if (!reservationToCancel) return;
 
-    setCancellingId(reservationId);
+    setCancellingId(reservationToCancel.id);
     try {
-      const response = await reservationApi.cancel(reservationId);
+      const response = await reservationApi.cancel(reservationToCancel.id);
       if (response.success) {
         // Update the reservation status locally
         setReservations(prev =>
           prev.map(r =>
-            r.id === reservationId ? { ...r, status: 'cancelled' } : r
+            r.id === reservationToCancel.id ? { ...r, status: 'cancelled' } : r
           )
         );
+        closeCancelModal();
+        showNotification('success', 'Reservation Cancelled', 'Your reservation has been cancelled successfully.');
       } else {
-        alert(response.message || 'Failed to cancel reservation');
+        showNotification('error', 'Cancellation Failed', response.message || 'Failed to cancel reservation');
       }
     } catch (err) {
-      alert('Failed to cancel reservation. Please try again.');
+      showNotification('error', 'Error', 'Failed to cancel reservation. Please try again.');
     } finally {
       setCancellingId(null);
     }
@@ -260,12 +286,12 @@ export default function MyReservationsPage() {
         }
         setShowModifyModal(false);
         setReservationToModify(null);
-        alert('Reservation modified successfully!');
+        showNotification('success', 'Reservation Modified', 'Your reservation has been modified successfully.');
       } else {
-        alert(response.message || 'Failed to modify reservation');
+        showNotification('error', 'Modification Failed', response.message || 'Failed to modify reservation');
       }
     } catch (err) {
-      alert('Failed to modify reservation. Please try again.');
+      showNotification('error', 'Error', 'Failed to modify reservation. Please try again.');
     } finally {
       setModifyLoading(false);
     }
@@ -322,7 +348,7 @@ export default function MyReservationsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'all'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -332,7 +358,7 @@ export default function MyReservationsPage() {
               </button>
               <button
                 onClick={() => setFilter('confirmed')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'confirmed'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -342,7 +368,7 @@ export default function MyReservationsPage() {
               </button>
               <button
                 onClick={() => setFilter('completed')}
-                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all ${
+                className={`px-4 py-1.5 text-sm rounded-full font-semibold transition-all cursor-pointer ${
                   filter === 'completed'
                     ? 'bg-[#FF6B35] text-white shadow-md'
                     : 'bg-white text-[#333333] hover:bg-[#FF6B35] hover:text-white'
@@ -370,7 +396,7 @@ export default function MyReservationsPage() {
               <p className="text-sm text-[#333333] opacity-70 mb-4">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="inline-block bg-[#FF6B35] text-white px-6 py-2 text-sm rounded-full font-semibold hover:bg-[#e55a2b] transition-all"
+                className="inline-block bg-[#FF6B35] text-white px-6 py-2 text-sm rounded-full font-semibold hover:bg-[#e55a2b] transition-all cursor-pointer"
               >
                 Try Again
               </button>
@@ -469,7 +495,7 @@ export default function MyReservationsPage() {
                     {(reservation.status === 'confirmed' || reservation.status === 'completed') && (
                       <button
                         onClick={() => handlePrintTicket(reservation)}
-                        className="w-full bg-[#FF6B35] text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#e55a2b] transition-all flex items-center justify-center gap-1.5"
+                        className="w-full bg-[#FF6B35] text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#e55a2b] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
@@ -481,7 +507,7 @@ export default function MyReservationsPage() {
                     {reservation.status === 'completed' && (
                       <button
                         onClick={() => handleRebook(reservation)}
-                        className="w-full bg-blue-600 text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5"
+                        className="w-full bg-blue-600 text-white px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -494,7 +520,7 @@ export default function MyReservationsPage() {
                       <>
                         <button
                           onClick={() => handleOpenModify(reservation)}
-                          className="w-full bg-white text-[#FF6B35] border border-[#FF6B35] px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#FF6B35] hover:text-white transition-all flex items-center justify-center gap-1.5"
+                          className="w-full bg-white text-[#FF6B35] border border-[#FF6B35] px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-[#FF6B35] hover:text-white transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -502,26 +528,14 @@ export default function MyReservationsPage() {
                           Modify
                         </button>
                         <button
-                          onClick={() => handleCancel(reservation.id)}
+                          onClick={() => openCancelModal(reservation)}
                           disabled={cancellingId === reservation.id}
-                          className="w-full bg-white text-red-600 border border-red-600 px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          className="w-full bg-white text-red-600 border border-red-600 px-3 py-1.5 text-xs rounded-lg font-semibold hover:bg-red-600 hover:text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                         >
-                          {cancellingId === reservation.id ? (
-                            <>
-                              <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                              </svg>
-                              Cancelling...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                              Cancel
-                            </>
-                          )}
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Cancel
                         </button>
                       </>
                     )}
@@ -592,7 +606,7 @@ export default function MyReservationsPage() {
 
       {/* Modify Reservation Modal */}
       {showModifyModal && reservationToModify && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
@@ -607,7 +621,7 @@ export default function MyReservationsPage() {
                   setShowModifyModal(false);
                   setReservationToModify(null);
                 }}
-                className="p-1 hover:bg-gray-100 rounded transition-colors"
+                className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer"
               >
                 <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
@@ -725,7 +739,7 @@ export default function MyReservationsPage() {
               <button
                 onClick={handleSubmitModify}
                 disabled={modifyLoading || !modifyForm.tableId || tablesLoading}
-                className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-[#FF6B35] text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-[#e55a2b] transition-colors disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
               >
                 {modifyLoading ? (
                   <>
@@ -741,9 +755,121 @@ export default function MyReservationsPage() {
                   setShowModifyModal(false);
                   setReservationToModify(null);
                 }}
-                className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {cancelModalOpen && reservationToCancel && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">Cancel Reservation</h2>
+              <button onClick={closeCancelModal} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 rounded-full">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-2">
+                Are you sure you want to cancel your reservation?
+              </p>
+              <p className="text-sm font-semibold text-[#333333] text-center mb-4">
+                {reservationToCancel.id}
+              </p>
+              <div className="bg-gray-50 p-3 rounded-lg mb-4">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-[#333333] opacity-70">Date</p>
+                    <p className="font-semibold text-[#333333]">{new Date(reservationToCancel.date).toLocaleDateString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#333333] opacity-70">Time</p>
+                    <p className="font-semibold text-[#333333]">{reservationToCancel.time}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#333333] opacity-70">Guests</p>
+                    <p className="font-semibold text-[#333333]">{reservationToCancel.guests}</p>
+                  </div>
+                  <div>
+                    <p className="text-[#333333] opacity-70">Table</p>
+                    <p className="font-semibold text-[#333333]">Table {reservationToCancel.tableNumber}</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 text-center mb-6">
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeCancelModal}
+                  disabled={cancellingId !== null}
+                  className="flex-1 bg-gray-200 text-[#333333] px-4 py-2 text-sm rounded-lg font-semibold hover:bg-gray-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Keep Reservation
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={cancellingId !== null}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 text-sm rounded-lg font-semibold hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cancellingId !== null ? 'Cancelling...' : 'Cancel Reservation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notificationModal.show && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-[#333333]">{notificationModal.title}</h2>
+              <button onClick={closeNotification} className="p-1 hover:bg-gray-100 rounded transition-colors cursor-pointer">
+                <svg className="w-5 h-5 text-[#333333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <div className={`flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full ${
+                notificationModal.type === 'success' ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {notificationModal.type === 'success' ? (
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+              <p className="text-sm text-[#333333] text-center mb-6">{notificationModal.message}</p>
+              <button
+                onClick={closeNotification}
+                className={`w-full px-4 py-2 text-sm rounded-lg font-semibold transition-colors cursor-pointer ${
+                  notificationModal.type === 'success'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                OK
               </button>
             </div>
           </div>

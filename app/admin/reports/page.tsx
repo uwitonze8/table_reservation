@@ -122,39 +122,195 @@ export default function AdminReportsPage() {
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportPDF = () => {
     if (!reportData) return;
 
-    const csvData = `
-QuickTable Restaurant Report
-Date Range: ${dateRange === 'thisMonth' ? 'This Month' : dateRange === 'lastMonth' ? 'Last Month' : dateRange === 'thisWeek' ? 'This Week' : 'Last 7 Days'}
-Generated: ${new Date().toLocaleString()}
+    const dateRangeLabel = dateRange === 'thisMonth' ? 'This Month' : dateRange === 'lastMonth' ? 'Last Month' : dateRange === 'thisWeek' ? 'This Week' : 'Last 7 Days';
 
-Summary Statistics
-Total Reservations,${reportData.summary.totalReservations}
-Confirmed Reservations,${reportData.summary.confirmedReservations}
-Completed Reservations,${reportData.summary.completedReservations}
-Cancelled Reservations,${reportData.summary.cancelledReservations}
-Total Guests,${reportData.summary.totalGuests}
-Average Party Size,${reportData.summary.averagePartySize.toFixed(1)}
-Table Utilization,${reportData.summary.tableUtilization}%
-Cancellation Rate,${reportData.summary.cancellationRate.toFixed(1)}%
+    // Create an iframe for printing in the same tab
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
 
-Top Tables
-Table,Bookings
-${reportData.topTables.map(t => `Table ${t.tableNumber},${t.bookings}`).join('\n')}
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>QuickTable Report - ${dateRangeLabel}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #FF6B35; padding-bottom: 20px; }
+          .header h1 { color: #FF6B35; font-size: 28px; margin-bottom: 5px; }
+          .header p { color: #666; font-size: 14px; }
+          .section { margin-bottom: 25px; }
+          .section h2 { color: #333; font-size: 18px; margin-bottom: 15px; border-left: 4px solid #FF6B35; padding-left: 10px; }
+          .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+          .stat-card { background: #f8f4f0; padding: 15px; border-radius: 8px; text-align: center; }
+          .stat-card .value { font-size: 24px; font-weight: bold; color: #FF6B35; }
+          .stat-card .label { font-size: 12px; color: #666; margin-top: 5px; }
+          .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+          .status-card { padding: 15px; border-radius: 8px; text-align: center; color: white; }
+          .status-card.confirmed { background: linear-gradient(135deg, #22c55e, #16a34a); }
+          .status-card.completed { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+          .status-card.cancelled { background: linear-gradient(135deg, #ef4444, #dc2626); }
+          .status-card.rate { background: linear-gradient(135deg, #eab308, #ca8a04); }
+          .status-card .value { font-size: 24px; font-weight: bold; }
+          .status-card .label { font-size: 12px; opacity: 0.9; }
+          .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+          th { background: #f8f4f0; font-weight: 600; }
+          .footer { margin-top: 30px; text-align: center; color: #999; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Quick Table</h1>
+          <p>Restaurant Performance Report</p>
+          <p style="margin-top: 10px;"><strong>Period:</strong> ${dateRangeLabel} | <strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        </div>
 
-Peak Hours
-Hour,Bookings
-${reportData.peakHours.map(h => `${h.hour},${h.bookings}`).join('\n')}
-    `.trim();
+        <div class="section">
+          <h2>Summary Statistics</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="value">${reportData.summary.totalReservations}</div>
+              <div class="label">Total Reservations</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #3b82f6;">${reportData.summary.totalGuests}</div>
+              <div class="label">Total Guests</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #8b5cf6;">${reportData.summary.averagePartySize.toFixed(1)}</div>
+              <div class="label">Avg Party Size</div>
+            </div>
+            <div class="stat-card">
+              <div class="value" style="color: #22c55e;">${reportData.summary.tableUtilization}%</div>
+              <div class="label">Table Utilization</div>
+            </div>
+          </div>
+        </div>
 
-    const blob = new Blob([csvData], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `quicktable-report-${dateRange}.csv`;
-    a.click();
+        <div class="section">
+          <h2>Reservation Status</h2>
+          <div class="status-grid">
+            <div class="status-card confirmed">
+              <div class="value">${reportData.summary.confirmedReservations}</div>
+              <div class="label">Confirmed</div>
+            </div>
+            <div class="status-card completed">
+              <div class="value">${reportData.summary.completedReservations}</div>
+              <div class="label">Completed</div>
+            </div>
+            <div class="status-card cancelled">
+              <div class="value">${reportData.summary.cancelledReservations}</div>
+              <div class="label">Cancelled</div>
+            </div>
+            <div class="status-card rate">
+              <div class="value">${reportData.summary.cancellationRate.toFixed(1)}%</div>
+              <div class="label">Cancellation Rate</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section two-col">
+          <div>
+            <h2>Top Tables</h2>
+            <table>
+              <thead>
+                <tr><th>Rank</th><th>Table</th><th>Bookings</th><th>Avg Guests</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.topTables.map((t, i) => `
+                  <tr>
+                    <td>#${i + 1}</td>
+                    <td>Table ${t.tableNumber}</td>
+                    <td>${t.bookings}</td>
+                    <td>${t.avgGuests.toFixed(1)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Peak Hours</h2>
+            <table>
+              <thead>
+                <tr><th>Time</th><th>Bookings</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.peakHours.map(h => `
+                  <tr>
+                    <td>${h.hour}</td>
+                    <td>${h.bookings}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="section two-col">
+          <div>
+            <h2>Customer Statistics</h2>
+            <table>
+              <tbody>
+                <tr><td>New Customers</td><td><strong>${reportData.customerStats.newCustomers}</strong></td></tr>
+                <tr><td>Returning Customers</td><td><strong>${reportData.customerStats.returningCustomers}</strong></td></tr>
+                <tr><td>Total Unique Customers</td><td><strong>${reportData.customerStats.totalUniqueCustomers}</strong></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Busiest Days</h2>
+            <table>
+              <thead>
+                <tr><th>Day</th><th>Bookings</th></tr>
+              </thead>
+              <tbody>
+                ${reportData.weekdayBreakdown.slice(0, 5).map(d => `
+                  <tr>
+                    <td>${d.dayName}</td>
+                    <td>${d.bookings}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="footer">
+          <p>Generated by Quick Table Restaurant Management System</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const iframeDoc = iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(htmlContent);
+    iframeDoc.close();
+
+    // Use setTimeout to ensure the content is fully rendered before printing
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      // Remove iframe after printing
+      setTimeout(() => {
+        document.body.removeChild(iframe);
+      }, 1000);
+    }, 250);
   };
 
   if (loading) {
@@ -182,7 +338,7 @@ ${reportData.peakHours.map(h => `${h.hour},${h.bookings}`).join('\n')}
             {error}
             <button
               onClick={fetchReportData}
-              className="ml-4 text-red-700 underline hover:no-underline"
+              className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
             >
               Retry
             </button>
@@ -215,7 +371,7 @@ ${reportData.peakHours.map(h => `${h.hour},${h.bookings}`).join('\n')}
                 <select
                   value={dateRange}
                   onChange={(e) => setDateRange(e.target.value)}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white"
+                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
                 >
                   <option value="thisWeek">This Week</option>
                   <option value="last7Days">Last 7 Days</option>
@@ -223,13 +379,13 @@ ${reportData.peakHours.map(h => `${h.hour},${h.bookings}`).join('\n')}
                   <option value="lastMonth">Last Month</option>
                 </select>
                 <button
-                  onClick={handleExportCSV}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                  onClick={handleExportPDF}
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                   </svg>
-                  Export CSV
+                  Export PDF
                 </button>
               </div>
             </div>
