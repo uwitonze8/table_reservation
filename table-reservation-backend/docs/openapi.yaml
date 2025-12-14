@@ -1,0 +1,186 @@
+openapi: 3.0.0
+info:
+  title: Table Reservation API
+  description: API for managing restaurant table reservations
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Bad request
+  /auth/login:
+    post:
+      summary: Login a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: User logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Unauthorized
+  /contact:
+    post:
+      summary: Send a contact message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContactMessageDto'
+      responses:
+        '201':
+          description: Message sent successfully
+        '400':
+          description: Bad request
+  /reservations:
+    post:
+      summary: Create a reservation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreateDto'
+      responses:
+        '201':
+          description: Reservation created successfully
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+  /reservations/{id}:
+    get:
+      summary: Get reservation details
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Reservation details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationDto'
+        '404':
+          description: Reservation not found
+        '401':
+          description: Unauthorized
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+        confirmPassword:
+          type: string
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+    ContactMessageDto:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        message:
+          type: string
+    ReservationCreateDto:
+      type: object
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        numberOfGuests:
+          type: integer
+        reservationDate:
+          type: string
+          format: date
+        reservationTime:
+          type: string
+          format: time
+        specialRequests:
+          type: string
+    ReservationDto:
+      type: object
+      properties:
+        id:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        numberOfGuests:
+          type: integer
+        reservationDate:
+          type: string
+          format: date
+        reservationTime:
+          type: string
+          format: time
+        specialRequests:
+          type: string
+        userId:
+          type: string
+securitySchemes:
+  bearerAuth:
+    type: http
+    scheme: bearer
+    bearerFormat: JWT
