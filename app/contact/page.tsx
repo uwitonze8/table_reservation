@@ -27,7 +27,14 @@ export default function ContactPage() {
     setIsSubmitting(true);
     setError('');
 
-    try {
+    // Client-side validation
+      if (formData.message.length < 10) {
+        setError('Message must be at least 10 characters long.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      try {
       const response = await contactApi.submit(formData);
 
       if (response.success) {
@@ -43,7 +50,12 @@ export default function ContactPage() {
           });
         }, 3000);
       } else {
-        setError(response.message || 'Failed to send message. Please try again.');
+        // Show more user-friendly error message
+        if (response.message?.includes('Validation')) {
+          setError('Please fill in all fields correctly. Message must be at least 10 characters.');
+        } else {
+          setError(response.message || 'Failed to send message. Please try again.');
+        }
       }
     } catch (err) {
       setError('Failed to send message. Please try again.');
@@ -213,10 +225,12 @@ export default function ContactPage() {
                     value={formData.message}
                     onChange={handleChange}
                     required
+                    minLength={10}
                     rows={4}
                     className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none transition text-[#333333] resize-none"
-                    placeholder="Your message..."
+                    placeholder="Your message (minimum 10 characters)..."
                   />
+                  <p className="text-xs text-gray-500 mt-1">{formData.message.length}/2000 characters (min 10)</p>
                 </div>
 
                 <button

@@ -26,16 +26,18 @@ public interface RestaurantTableRepository extends JpaRepository<RestaurantTable
 
     List<RestaurantTable> findByCapacityGreaterThanEqual(Integer capacity);
 
+    // Find tables that are available for the requested time slot
+    // Excludes tables that have any reservation overlapping with the 2-hour window
     @Query("SELECT t FROM RestaurantTable t WHERE t.capacity >= :guests AND t.status != 'MAINTENANCE' " +
             "AND t.id NOT IN (" +
             "  SELECT r.table.id FROM Reservation r " +
             "  WHERE r.reservationDate = :date " +
-            "  AND r.reservationTime BETWEEN :startTime AND :endTime " +
+            "  AND r.reservationTime BETWEEN :windowStart AND :windowEnd " +
             "  AND r.status IN ('PENDING', 'CONFIRMED')" +
             ")")
     List<RestaurantTable> findAvailableTables(@Param("date") LocalDate date,
-                                               @Param("startTime") LocalTime startTime,
-                                               @Param("endTime") LocalTime endTime,
+                                               @Param("windowStart") LocalTime windowStart,
+                                               @Param("windowEnd") LocalTime windowEnd,
                                                @Param("guests") Integer guests);
 
     @Query("SELECT COUNT(t) FROM RestaurantTable t WHERE t.status = :status")
@@ -43,4 +45,17 @@ public interface RestaurantTableRepository extends JpaRepository<RestaurantTable
 
     @Query("SELECT COUNT(t) FROM RestaurantTable t")
     Long countAllTables();
+
+    // Find tables that are RESERVED or OCCUPIED but have no active reservations
+    // (i.e., the reservation time window has passed)
+    @Query("SELECT t FROM RestaurantTable t WHERE t.status IN ('RESERVED', 'OCCUPIED') " +
+            "AND t.id NOT IN (" +
+            "  SELECT r.table.id FROM Reservation r " +
+            "  WHERE r.reservationDate = :date " +
+            "  AND r.reservationTime BETWEEN :windowStart AND :windowEnd " +
+            "  AND r.status IN ('PENDING', 'CONFIRMED')" +
+            ")")
+    List<RestaurantTable> findTablesWithExpiredReservations(@Param("date") LocalDate date,
+                                                             @Param("windowStart") LocalTime windowStart,
+                                                             @Param("windowEnd") LocalTime windowEnd);
 }

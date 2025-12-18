@@ -255,7 +255,7 @@ export default function AdminMessagesPage() {
                     key={message.id}
                     onClick={() => handleSelectMessage(message)}
                     className={`p-4 cursor-pointer hover:bg-[#F8F4F0] transition-colors ${
-                      !message.read ? 'bg-blue-50' : ''
+                      !message.read ? 'bg-[#FF6B35]/5' : ''
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
@@ -276,7 +276,7 @@ export default function AdminMessagesPage() {
                         <p className="text-xs text-[#333333] opacity-70">{formatDate(message.createdAt)}</p>
                         <div className="flex gap-1 mt-1 justify-end">
                           {!message.read && (
-                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
+                            <span className="px-2 py-0.5 bg-[#FF6B35]/10 text-[#FF6B35] rounded-full text-xs font-semibold">
                               New
                             </span>
                           )}
@@ -333,7 +333,7 @@ export default function AdminMessagesPage() {
               {/* Status Badges */}
               <div className="flex gap-2 mb-4">
                 <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                  selectedMessage.read ? 'bg-gray-100 text-gray-800' : 'bg-blue-100 text-blue-800'
+                  selectedMessage.read ? 'bg-gray-100 text-gray-800' : 'bg-[#FF6B35]/10 text-[#FF6B35]'
                 }`}>
                   {selectedMessage.read ? 'Read' : 'Unread'}
                 </span>

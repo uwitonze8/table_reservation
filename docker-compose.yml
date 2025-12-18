@@ -1,0 +1,68 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: quicktable-db
+    environment:
+      POSTGRES_DB: quicktable
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - quicktable-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: ./table-reservation-backend
+      dockerfile: Dockerfile
+    container_name: quicktable-backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/quicktable
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      JWT_SECRET: cXVpY2t0YWJsZXNlY3JldGtleTIwMjV2ZXJ5c2VjdXJlY2hhbmdlaW5wcm9kdWN0aW9u
+      JWT_EXPIRATION: 86400000
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quicktable-network
+    restart: unless-stopped
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quicktable-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8081/api
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - quicktable-network
+    restart: unless-stopped
+
+networks:
+  quicktable-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

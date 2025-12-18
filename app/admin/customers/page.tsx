@@ -7,6 +7,8 @@ import { adminApi, User } from '@/lib/api';
 // Customer type alias for User with customer-specific fields
 type Customer = User & { isActive?: boolean };
 
+const ITEMS_PER_PAGE = 10;
+
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,21 +16,55 @@ export default function AdminCustomersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+  const [tierCounts, setTierCounts] = useState({
+    total: 0,
+    active: 0,
+    vip: 0,
+    totalPoints: 0,
+  });
+
+  // Fetch tier counts (all customers) once on initial load
+  const fetchTierCounts = async () => {
+    try {
+      const response = await adminApi.getAllCustomers(0, 1000);
+      if (response.success && response.data) {
+        const allCustomers = response.data.content || [];
+        setTierCounts({
+          total: response.data.totalElements || allCustomers.length,
+          active: allCustomers.filter((c: User) => c.enabled).length,
+          vip: allCustomers.filter((c: User) => c.loyaltyTier === 'PLATINUM' || c.loyaltyTier === 'GOLD').length,
+          totalPoints: allCustomers.reduce((sum: number, c: User) => sum + c.loyaltyPoints, 0),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch tier counts:', err);
+    }
+  };
 
   // Fetch customers from API
   useEffect(() => {
-    fetchCustomers();
+    fetchCustomers(currentPage);
+  }, [currentPage]);
+
+  // Fetch tier counts on initial load
+  useEffect(() => {
+    fetchTierCounts();
   }, []);
 
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (page: number = 1) => {
     try {
       setLoading(true);
-      const response = await adminApi.getAllCustomers(0, 100);
+      const response = await adminApi.getAllCustomers(page - 1, ITEMS_PER_PAGE);
       if (response.success && response.data) {
         // Extract content array from paginated response
         const customersData = response.data.content || [];
         // Map enabled field to isActive for compatibility
         setCustomers(customersData.map(c => ({ ...c, isActive: c.enabled })));
+        setTotalPages(response.data.totalPages || 1);
+        setTotalElements(response.data.totalElements || 0);
       } else {
         setError(response.message || 'Failed to load customers');
       }
@@ -49,10 +85,51 @@ export default function AdminCustomersPage() {
   });
 
   const stats = {
-    total: customers.length,
-    active: customers.filter(c => c.isActive).length,
-    vip: customers.filter(c => c.loyaltyTier === 'PLATINUM' || c.loyaltyTier === 'GOLD').length,
-    totalPoints: customers.reduce((sum, c) => sum + c.loyaltyPoints, 0),
+    total: tierCounts.total || totalElements,
+    active: tierCounts.active,
+    vip: tierCounts.vip,
+    totalPoints: tierCounts.totalPoints,
+  };
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
   };
 
   const getTierColor = (tier: string) => {
@@ -96,7 +173,7 @@ export default function AdminCustomersPage() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
             {error}
             <button
-              onClick={fetchCustomers}
+              onClick={() => fetchCustomers(currentPage)}
               className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
             >
               Retry
@@ -239,6 +316,59 @@ export default function AdminCustomersPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {totalElements > 0 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-gray-200">
+                <div className="text-xs text-[#333333] opacity-70">
+                  Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, totalElements)} of {totalElements} customers
+                </div>
+                <div className="flex items-center gap-1">
+                  {/* Previous Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg text-[#333333] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Previous page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Page Numbers */}
+                  {getPageNumbers().map((page, index) => (
+                    typeof page === 'number' ? (
+                      <button
+                        key={index}
+                        onClick={() => handlePageChange(page)}
+                        className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          currentPage === page
+                            ? 'bg-[#FF6B35] text-white'
+                            : 'text-[#333333] hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ) : (
+                      <span key={index} className="px-1 text-[#333333] opacity-50">...</span>
+                    )
+                  ))}
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg text-[#333333] hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    title="Next page"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             )}
           </div>

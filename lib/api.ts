@@ -231,6 +231,10 @@ export const adminApi = {
     return apiRequest<Reservation[]>(`/admin/reservations/date/${date}`);
   },
 
+  getReservationsByDateRange: async (startDate: string, endDate: string) => {
+    return apiRequest<Reservation[]>(`/admin/reservations/range?startDate=${startDate}&endDate=${endDate}`);
+  },
+
   createReservation: async (data: CreateReservationData) => {
     return apiRequest<Reservation>('/admin/reservations', {
       method: 'POST',
@@ -467,6 +471,10 @@ export const staffApi = {
 
   getReservationsByDate: async (date: string) => {
     return apiRequest<Reservation[]>(`/staff/reservations/date/${date}`);
+  },
+
+  getReservationsByDateRange: async (startDate: string, endDate: string) => {
+    return apiRequest<Reservation[]>(`/staff/reservations/range?startDate=${startDate}&endDate=${endDate}`);
   },
 
   updateReservation: async (id: number, data: Partial<CreateReservationData>) => {

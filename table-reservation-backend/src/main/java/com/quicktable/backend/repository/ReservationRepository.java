@@ -36,11 +36,16 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     List<Reservation> findActiveReservationsByTableAndDate(@Param("tableId") Long tableId,
                                                             @Param("date") LocalDate date);
 
+    // Check for overlapping reservations assuming 2-hour reservation windows
+    // Fetches all active reservations for the table on the given date
+    // The overlap check is done in the service layer for database portability
     @Query("SELECT r FROM Reservation r WHERE r.table.id = :tableId AND r.reservationDate = :date " +
-            "AND r.reservationTime = :time AND r.status IN ('PENDING', 'CONFIRMED')")
+            "AND r.status IN ('PENDING', 'CONFIRMED') " +
+            "AND r.reservationTime BETWEEN :startTime AND :endTime")
     List<Reservation> findConflictingReservations(@Param("tableId") Long tableId,
                                                    @Param("date") LocalDate date,
-                                                   @Param("time") LocalTime time);
+                                                   @Param("startTime") LocalTime startTime,
+                                                   @Param("endTime") LocalTime endTime);
 
     @Query("SELECT r FROM Reservation r WHERE r.reservationDate = :date AND r.status IN ('PENDING', 'CONFIRMED')")
     List<Reservation> findActiveReservationsByDate(@Param("date") LocalDate date);

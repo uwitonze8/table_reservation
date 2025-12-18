@@ -24,12 +24,48 @@ interface SearchResults {
   messages: ContactMessage[];
 }
 
+// Date filter types
+type DateFilterType = 'today' | 'week' | 'month' | 'custom';
+
+// Helper to get date range based on filter type
+const getDateRange = (filterType: DateFilterType, customStart?: string, customEnd?: string) => {
+  const today = new Date();
+  const formatDate = (d: Date) => d.toISOString().split('T')[0];
+
+  switch (filterType) {
+    case 'today':
+      return { startDate: formatDate(today), endDate: formatDate(today) };
+    case 'week': {
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6); // End of week (Saturday)
+      return { startDate: formatDate(weekStart), endDate: formatDate(weekEnd) };
+    }
+    case 'month': {
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      return { startDate: formatDate(monthStart), endDate: formatDate(monthEnd) };
+    }
+    case 'custom':
+      return { startDate: customStart || formatDate(today), endDate: customEnd || formatDate(today) };
+    default:
+      return { startDate: formatDate(today), endDate: formatDate(today) };
+  }
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [todayReservations, setTodayReservations] = useState<Reservation[]>([]);
+  const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Date filter state
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('today');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
 
   // Global search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -216,17 +252,34 @@ export default function AdminDashboard() {
     searchResults.staff.length > 0 ||
     searchResults.messages.length > 0;
 
+  // Fetch reservations based on date filter
+  const fetchFilteredReservations = useCallback(async () => {
+    try {
+      const { startDate, endDate } = getDateRange(dateFilter, customStartDate, customEndDate);
+
+      let reservationsResponse;
+      if (dateFilter === 'today') {
+        reservationsResponse = await adminApi.getTodayReservations();
+      } else {
+        reservationsResponse = await adminApi.getReservationsByDateRange(startDate, endDate);
+      }
+
+      if (reservationsResponse.success && reservationsResponse.data) {
+        setFilteredReservations(reservationsResponse.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch filtered reservations:', err);
+    }
+  }, [dateFilter, customStartDate, customEndDate]);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError('');
 
-        // Fetch dashboard stats, today's reservations, and search data in parallel
-        const [statsResponse, reservationsResponse] = await Promise.all([
-          adminApi.getDashboardStats(),
-          adminApi.getTodayReservations(),
-        ]);
+        // Fetch dashboard stats
+        const statsResponse = await adminApi.getDashboardStats();
 
         if (statsResponse.success && statsResponse.data) {
           setStats(statsResponse.data);
@@ -234,9 +287,8 @@ export default function AdminDashboard() {
           setError(statsResponse.message || 'Failed to load dashboard stats');
         }
 
-        if (reservationsResponse.success && reservationsResponse.data) {
-          setTodayReservations(reservationsResponse.data);
-        }
+        // Fetch reservations based on date filter
+        await fetchFilteredReservations();
 
         // Fetch search data separately (don't block dashboard loading)
         fetchSearchData();
@@ -249,7 +301,55 @@ export default function AdminDashboard() {
     };
 
     fetchData();
-  }, [fetchSearchData]);
+  }, [fetchSearchData, fetchFilteredReservations]);
+
+  // Refetch reservations when date filter changes
+  useEffect(() => {
+    if (!loading) {
+      fetchFilteredReservations();
+    }
+  }, [dateFilter, customStartDate, customEndDate, fetchFilteredReservations, loading]);
+
+  // Handle date filter change
+  const handleDateFilterChange = (filter: DateFilterType) => {
+    if (filter === 'custom') {
+      setShowCustomDatePicker(true);
+    } else {
+      setShowCustomDatePicker(false);
+    }
+    setDateFilter(filter);
+  };
+
+  // Apply custom date range
+  const applyCustomDateRange = () => {
+    if (customStartDate && customEndDate) {
+      setDateFilter('custom');
+      fetchFilteredReservations();
+    }
+  };
+
+  // Calculate stats from filtered reservations
+  const filteredStats = {
+    total: filteredReservations.length,
+    confirmed: filteredReservations.filter(r => r.status === 'CONFIRMED').length,
+    pending: filteredReservations.filter(r => r.status === 'PENDING').length,
+    completed: filteredReservations.filter(r => r.status === 'COMPLETED').length,
+    cancelled: filteredReservations.filter(r => r.status === 'CANCELLED').length,
+    totalGuests: filteredReservations.filter(r => r.status !== 'CANCELLED' && r.status !== 'NO_SHOW')
+      .reduce((sum, r) => sum + r.numberOfGuests, 0),
+  };
+
+  // Get current date range label
+  const getDateRangeLabel = () => {
+    const { startDate, endDate } = getDateRange(dateFilter, customStartDate, customEndDate);
+    if (dateFilter === 'today') return 'Today';
+    if (dateFilter === 'week') return 'This Week';
+    if (dateFilter === 'month') return 'This Month';
+    if (dateFilter === 'custom' && customStartDate && customEndDate) {
+      return `${new Date(customStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(customEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    }
+    return 'Custom';
+  };
 
   if (loading) {
     return (
@@ -292,6 +392,51 @@ export default function AdminDashboard() {
             <p className="text-sm text-[#333333] opacity-70">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
+          </div>
+
+          {/* Date Filter Buttons */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+              {(['today', 'week', 'month', 'custom'] as DateFilterType[]).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => handleDateFilterChange(filter)}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                    dateFilter === filter
+                      ? 'bg-[#FF6B35] text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {filter === 'today' ? 'Today' : filter === 'week' ? 'This Week' : filter === 'month' ? 'This Month' : 'Custom'}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Date Picker */}
+            {showCustomDatePicker && (
+              <div className="flex items-center gap-2 bg-white rounded-lg shadow-sm border border-gray-200 p-2">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-[#FF6B35]"
+                />
+                <span className="text-xs text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-[#FF6B35]"
+                />
+                <button
+                  onClick={applyCustomDateRange}
+                  disabled={!customStartDate || !customEndDate}
+                  className="px-3 py-1 bg-[#FF6B35] text-white text-xs font-medium rounded hover:bg-[#e55a2b] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Global Search */}
@@ -538,7 +683,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid - Shows filtered stats based on date range */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           <div className="bg-white rounded-lg shadow-md p-3">
             <div className="flex items-center justify-between mb-2">
@@ -547,14 +692,12 @@ export default function AdminDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
-              {stats?.reservationTrend !== undefined && stats.reservationTrend !== 0 && (
-                <span className={`text-xs font-semibold ${stats.reservationTrend > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.reservationTrend > 0 ? '+' : ''}{stats.reservationTrend}%
-                </span>
-              )}
+              <span className="text-[10px] px-1.5 py-0.5 bg-[#FF6B35] bg-opacity-10 text-[#FF6B35] rounded font-medium">
+                {getDateRangeLabel()}
+              </span>
             </div>
-            <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.totalReservations || 0}</p>
-            <p className="text-xs text-[#333333] opacity-70">Total Reservations Today</p>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.total}</p>
+            <p className="text-xs text-[#333333] opacity-70">Total Reservations</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-3">
@@ -565,7 +708,7 @@ export default function AdminDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.confirmedReservations || 0}</p>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.confirmed}</p>
             <p className="text-xs text-[#333333] opacity-70">Confirmed</p>
           </div>
 
@@ -576,13 +719,8 @@ export default function AdminDashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              {stats?.guestTrend !== undefined && stats.guestTrend !== 0 && (
-                <span className={`text-xs font-semibold ${stats.guestTrend > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {stats.guestTrend > 0 ? '+' : ''}{stats.guestTrend}%
-                </span>
-              )}
             </div>
-            <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.totalGuestsExpected || 0}</p>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.totalGuests}</p>
             <p className="text-xs text-[#333333] opacity-70">Total Guests Expected</p>
           </div>
 
@@ -600,7 +738,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Additional Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
           <div className="bg-white rounded-lg shadow-md p-3">
             <div className="flex items-center justify-between mb-2">
               <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -609,8 +747,32 @@ export default function AdminDashboard() {
                 </svg>
               </div>
             </div>
-            <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.pendingReservations || 0}</p>
-            <p className="text-xs text-[#333333] opacity-70">Pending Reservations</p>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.pending}</p>
+            <p className="text-xs text-[#333333] opacity-70">Pending</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-md p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.completed}</p>
+            <p className="text-xs text-[#333333] opacity-70">Completed</p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-md p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-[#333333] mb-0.5">{filteredStats.cancelled}</p>
+            <p className="text-xs text-[#333333] opacity-70">Cancelled</p>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-3">
@@ -623,18 +785,6 @@ export default function AdminDashboard() {
             </div>
             <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.totalCustomers || 0}</p>
             <p className="text-xs text-[#333333] opacity-70">Total Customers</p>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-md p-3">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-[#333333] mb-0.5">{stats?.newCustomersToday || 0}</p>
-            <p className="text-xs text-[#333333] opacity-70">New Customers Today</p>
           </div>
         </div>
 
@@ -684,24 +834,29 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Today's Reservations */}
+        {/* Reservations Table */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-[#333333]">Today&apos;s Reservations</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-[#333333]">Reservations</h2>
+              <span className="text-xs px-2 py-0.5 bg-[#FF6B35] bg-opacity-10 text-[#FF6B35] rounded font-medium">
+                {getDateRangeLabel()}
+              </span>
+            </div>
             <Link href="/admin/reservations" className="text-[#FF6B35] hover:text-[#e55a2b] font-semibold text-xs">
               View All →
             </Link>
           </div>
 
-          {todayReservations.length === 0 ? (
+          {filteredReservations.length === 0 ? (
             <div className="text-center py-8">
               <div className="w-16 h-16 bg-[#F8F4F0] rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-8 h-8 text-[#FF6B35]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-[#333333] mb-2">No Reservations Today</h3>
-              <p className="text-sm text-[#333333] opacity-70">There are no reservations scheduled for today.</p>
+              <h3 className="text-lg font-bold text-[#333333] mb-2">No Reservations</h3>
+              <p className="text-sm text-[#333333] opacity-70">There are no reservations for {getDateRangeLabel().toLowerCase()}.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -710,6 +865,7 @@ export default function AdminDashboard() {
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">ID</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Customer</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Date</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Time</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Guests</th>
                     <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Table</th>
@@ -718,10 +874,13 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {todayReservations.slice(0, 5).map((reservation) => (
+                  {filteredReservations.slice(0, 10).map((reservation) => (
                     <tr key={reservation.id} className="border-b border-gray-100 hover:bg-[#F8F4F0] transition-colors">
                       <td className="py-3 px-3 text-xs text-[#333333]">{reservation.reservationCode}</td>
                       <td className="py-3 px-3 text-xs font-medium text-[#333333]">{reservation.customerName}</td>
+                      <td className="py-3 px-3 text-xs text-[#333333]">
+                        {new Date(reservation.reservationDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </td>
                       <td className="py-3 px-3 text-xs text-[#333333]">{formatTime(reservation.reservationTime)}</td>
                       <td className="py-3 px-3 text-xs text-[#333333]">{reservation.numberOfGuests}</td>
                       <td className="py-3 px-3 text-xs text-[#333333]">Table {reservation.tableNumber}</td>

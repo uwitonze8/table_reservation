@@ -9,6 +9,7 @@ import com.quicktable.backend.repository.ReservationRepository;
 import com.quicktable.backend.repository.RestaurantTableRepository;
 import com.quicktable.backend.util.DtoMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -18,9 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @SuppressWarnings("null")
@@ -46,10 +49,19 @@ public class ReservationService {
         }
 
         // Check for conflicting reservations (assuming 2-hour reservation slots)
+        // A conflict exists if any existing reservation's time window overlaps with the new one
+        // New reservation window: [requestTime - 2h, requestTime + 2h)
+        LocalTime requestTime = request.getReservationTime();
+        LocalTime windowStart = requestTime.minusHours(2).isBefore(LocalTime.MIN.plusHours(2))
+                ? LocalTime.MIN : requestTime.minusHours(2);
+        LocalTime windowEnd = requestTime.plusHours(2).isAfter(LocalTime.MAX.minusHours(2))
+                ? LocalTime.MAX : requestTime.plusHours(2);
+
         List<Reservation> conflicts = reservationRepository.findConflictingReservations(
                 request.getTableId(),
                 request.getReservationDate(),
-                request.getReservationTime()
+                windowStart,
+                windowEnd
         );
 
         if (!conflicts.isEmpty()) {
@@ -73,6 +85,20 @@ public class ReservationService {
                 .build();
 
         Reservation savedReservation = reservationRepository.save(reservation);
+
+        // Mark table as RESERVED if reservation is for today and within current time window
+        LocalDate today = LocalDate.now();
+        LocalTime now = LocalTime.now();
+        if (request.getReservationDate().equals(today)) {
+            // Check if reservation time is within 2 hours from now (before or after)
+            LocalTime reservationTime = request.getReservationTime();
+            long minutesDiff = Math.abs(java.time.Duration.between(now, reservationTime).toMinutes());
+            if (minutesDiff <= 120) { // Within 2 hours
+                table.setStatus(TableStatus.RESERVED);
+                tableRepository.save(table);
+                log.info("Table {} marked as RESERVED for reservation {}", table.getTableNumber(), savedReservation.getReservationCode());
+            }
+        }
 
         // Update user stats
         userService.updateUserStats(userId, false, false);
@@ -129,6 +155,12 @@ public class ReservationService {
 
     public List<ReservationDTO> getTodayReservations() {
         return getReservationsByDate(LocalDate.now());
+    }
+
+    public List<ReservationDTO> getReservationsByDateRange(LocalDate startDate, LocalDate endDate) {
+        return reservationRepository.findByDateRange(startDate, endDate).stream()
+                .map(dtoMapper::toReservationDTO)
+                .collect(Collectors.toList());
     }
 
     public PagedResponse<ReservationDTO> searchReservations(ReservationFilterRequest filter) {

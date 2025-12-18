@@ -244,7 +244,7 @@ export default function AdminReservationsPage() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
             {error}
             <button
-              onClick={fetchReservations}
+              onClick={() => fetchReservations(currentPage)}
               className="ml-4 text-red-700 underline hover:no-underline cursor-pointer"
             >
               Retry
@@ -372,6 +372,7 @@ export default function AdminReservationsPage() {
                       <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Date & Time</th>
                       <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Guests</th>
                       <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Table</th>
+                      <th className="text-center py-2 px-3 text-xs font-semibold text-[#333333]" title="Pre-Order / Dietary / Requests">Notes</th>
                       <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Status</th>
                       <th className="text-left py-2 px-3 text-xs font-semibold text-[#333333]">Actions</th>
                     </tr>
@@ -391,6 +392,31 @@ export default function AdminReservationsPage() {
                         </td>
                         <td className="py-3 px-3 text-xs text-[#333333]">{reservation.numberOfGuests}</td>
                         <td className="py-3 px-3 text-xs text-[#333333]">Table {reservation.tableNumber}</td>
+                        <td className="py-3 px-3">
+                          <div className="flex justify-center items-center gap-1">
+                            {reservation.preOrderData && (
+                              <span className="inline-flex items-center justify-center w-5 h-5 bg-[#FF6B35] bg-opacity-10 rounded-full" title="Has Pre-Order">
+                                <svg className="w-3 h-3 text-[#FF6B35]" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M3 1a1 1 0 000 2h1.22l.305 1.222a.997.997 0 00.01.042l1.358 5.43-.893.892C3.74 11.846 4.632 14 6.414 14H15a1 1 0 000-2H6.414l1-1H14a1 1 0 00.894-.553l3-6A1 1 0 0017 3H6.28l-.31-1.243A1 1 0 005 1H3zM16 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM6.5 18a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+                                </svg>
+                              </span>
+                            )}
+                            {reservation.dietaryNotes && (
+                              <span className="inline-flex items-center justify-center w-5 h-5 bg-yellow-100 rounded-full" title="Has Dietary Notes">
+                                <svg className="w-3 h-3 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                              </span>
+                            )}
+                            {reservation.specialRequests && (
+                              <span className="inline-flex items-center justify-center w-5 h-5 bg-blue-100 rounded-full" title="Has Special Requests">
+                                <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="py-3 px-3">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
                             reservation.status === 'CONFIRMED'

@@ -83,6 +83,15 @@ public class AdminController {
         return ResponseEntity.ok(ApiResponse.success(reservations));
     }
 
+    @GetMapping("/reservations/range")
+    @Operation(summary = "Get reservations by date range")
+    public ResponseEntity<ApiResponse<List<ReservationDTO>>> getReservationsByDateRange(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        List<ReservationDTO> reservations = reservationService.getReservationsByDateRange(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success(reservations));
+    }
+
     @PostMapping("/reservations")
     @Operation(summary = "Create reservation (admin)")
     public ResponseEntity<ApiResponse<ReservationDTO>> createReservation(

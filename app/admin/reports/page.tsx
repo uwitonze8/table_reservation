@@ -2,41 +2,117 @@
 
 import { useState, useEffect } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
-import { adminApi, ReportData } from '@/lib/api';
+import { adminApi, ReportData, Reservation } from '@/lib/api';
 
 export default function AdminReportsPage() {
   const [reportData, setReportData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [dateRange, setDateRange] = useState('thisMonth');
+  const [dateRange, setDateRange] = useState('today');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showCustomModal, setShowCustomModal] = useState(false);
 
   useEffect(() => {
-    fetchReportData();
+    if (dateRange !== 'custom') {
+      fetchReportData();
+    }
   }, [dateRange]);
+
+  // Helper function to get date range boundaries
+  const getDateRange = (): { startDate: Date; endDate: Date; label: string } => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    switch (dateRange) {
+      case 'today':
+        return {
+          startDate: today,
+          endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1),
+          label: `Today (${today.toLocaleDateString()})`
+        };
+      case 'thisWeek': {
+        const dayOfWeek = today.getDay();
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - dayOfWeek);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        return {
+          startDate: startOfWeek,
+          endDate: endOfWeek,
+          label: `This Week (${startOfWeek.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()})`
+        };
+      }
+      case 'thisMonth': {
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        endOfMonth.setHours(23, 59, 59, 999);
+        return {
+          startDate: startOfMonth,
+          endDate: endOfMonth,
+          label: `This Month (${startOfMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })})`
+        };
+      }
+      case 'custom': {
+        const start = customStartDate ? new Date(customStartDate) : today;
+        const end = customEndDate ? new Date(customEndDate) : today;
+        end.setHours(23, 59, 59, 999);
+        return {
+          startDate: start,
+          endDate: end,
+          label: `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`
+        };
+      }
+      default:
+        return {
+          startDate: today,
+          endDate: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1),
+          label: 'Today'
+        };
+    }
+  };
+
+  // Filter reservations by date range
+  const filterReservationsByDateRange = (reservations: Reservation[]): Reservation[] => {
+    const { startDate, endDate } = getDateRange();
+
+    return reservations.filter(r => {
+      if (!r.reservationDate) return false;
+      const reservationDate = new Date(r.reservationDate);
+      return reservationDate >= startDate && reservationDate <= endDate;
+    });
+  };
 
   const fetchReportData = async () => {
     try {
       setLoading(true);
       setError('');
 
-      // Fetch dashboard stats and reservations to generate report data
+      // Fetch dashboard stats and all reservations to generate report data
       const [statsResponse, reservationsResponse] = await Promise.all([
         adminApi.getDashboardStats(),
-        adminApi.getAllReservations(0, 100)
+        adminApi.getAllReservations(0, 1000)
       ]);
 
       if (statsResponse.success && statsResponse.data) {
         const stats = statsResponse.data;
-        const reservations = reservationsResponse.success && reservationsResponse.data
+        const allReservations = reservationsResponse.success && reservationsResponse.data
           ? reservationsResponse.data.content || []
           : [];
 
-        // Calculate report data from dashboard stats
-        const totalGuests = stats.totalGuestsExpected + stats.totalGuestsServed;
-        const totalReservations = stats.totalReservations || 1;
-        const avgPartySize = totalGuests / totalReservations || 0;
+        // Filter reservations by selected date range
+        const reservations = filterReservationsByDateRange(allReservations);
+
+        // Calculate report data from filtered reservations
+        const totalReservations = reservations.length;
+        const confirmedReservations = reservations.filter(r => r.status === 'CONFIRMED').length;
+        const completedReservations = reservations.filter(r => r.status === 'COMPLETED').length;
+        const cancelledReservations = reservations.filter(r => r.status === 'CANCELLED').length;
+        const totalGuests = reservations.reduce((sum, r) => sum + r.numberOfGuests, 0);
+        const avgPartySize = totalReservations > 0 ? totalGuests / totalReservations : 0;
         const cancellationRate = totalReservations > 0
-          ? (stats.cancelledReservations / totalReservations) * 100
+          ? (cancelledReservations / totalReservations) * 100
           : 0;
 
         // Generate top tables data from reservations
@@ -89,23 +165,30 @@ export default function AdminReportsPage() {
           .map(dayName => ({ dayName, bookings: weekdayBookings[dayName] || 0 }))
           .sort((a, b) => b.bookings - a.bookings);
 
+        // Calculate unique customers from filtered reservations
+        const uniqueCustomerEmails = new Set(reservations.map(r => r.customerEmail));
+        const totalUniqueCustomers = uniqueCustomerEmails.size;
+
+        // Calculate table utilization from filtered data
+        const tableUtilization = stats.occupancyRate || 0;
+
         const generatedReport: ReportData = {
           summary: {
-            totalReservations: stats.totalReservations,
-            confirmedReservations: stats.confirmedReservations,
-            completedReservations: stats.completedReservations,
-            cancelledReservations: stats.cancelledReservations,
+            totalReservations,
+            confirmedReservations,
+            completedReservations,
+            cancelledReservations,
             totalGuests,
             averagePartySize: avgPartySize,
-            tableUtilization: stats.occupancyRate,
+            tableUtilization,
             cancellationRate
           },
           topTables,
           peakHours,
           customerStats: {
-            newCustomers: stats.newCustomersToday,
-            returningCustomers: Math.max(0, stats.totalCustomers - stats.newCustomersToday),
-            totalUniqueCustomers: stats.totalCustomers
+            newCustomers: totalUniqueCustomers,
+            returningCustomers: 0,
+            totalUniqueCustomers
           },
           weekdayBreakdown
         };
@@ -125,7 +208,7 @@ export default function AdminReportsPage() {
   const handleExportPDF = () => {
     if (!reportData) return;
 
-    const dateRangeLabel = dateRange === 'thisMonth' ? 'This Month' : dateRange === 'lastMonth' ? 'Last Month' : dateRange === 'thisWeek' ? 'This Week' : 'Last 7 Days';
+    const { label: dateRangeLabel } = getDateRange();
 
     // Create an iframe for printing in the same tab
     const iframe = document.createElement('iframe');
@@ -366,26 +449,70 @@ export default function AdminReportsPage() {
                 <p className="text-sm text-[#333333] opacity-70">
                   View restaurant performance metrics and insights
                 </p>
+                <p className="text-xs text-[#FF6B35] font-semibold mt-1">
+                  Showing data for: {getDateRange().label}
+                </p>
               </div>
-              <div className="flex gap-2">
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] outline-none bg-white cursor-pointer"
-                >
-                  <option value="thisWeek">This Week</option>
-                  <option value="last7Days">Last 7 Days</option>
-                  <option value="thisMonth">This Month</option>
-                  <option value="lastMonth">Last Month</option>
-                </select>
+              <div className="flex gap-2 items-center">
+                {/* Date Range Buttons */}
+                <div className="flex bg-white rounded-lg border border-gray-300 p-1">
+                  <button
+                    onClick={() => setDateRange('today')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                      dateRange === 'today'
+                        ? 'bg-[#FF6B35] text-white'
+                        : 'text-[#333333] hover:bg-gray-100'
+                    }`}
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => setDateRange('thisWeek')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                      dateRange === 'thisWeek'
+                        ? 'bg-[#FF6B35] text-white'
+                        : 'text-[#333333] hover:bg-gray-100'
+                    }`}
+                  >
+                    This Week
+                  </button>
+                  <button
+                    onClick={() => setDateRange('thisMonth')}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                      dateRange === 'thisMonth'
+                        ? 'bg-[#FF6B35] text-white'
+                        : 'text-[#333333] hover:bg-gray-100'
+                    }`}
+                  >
+                    This Month
+                  </button>
+                  <button
+                    onClick={() => setShowCustomModal(true)}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors cursor-pointer ${
+                      dateRange === 'custom'
+                        ? 'bg-[#FF6B35] text-white'
+                        : 'text-[#333333] hover:bg-gray-100'
+                    }`}
+                  >
+                    Custom
+                  </button>
+                </div>
+
+                {/* Show current date range label for custom */}
+                {dateRange === 'custom' && customStartDate && customEndDate && (
+                  <span className="text-xs text-[#333333] opacity-70 bg-[#F8F4F0] px-2 py-1 rounded">
+                    {new Date(customStartDate).toLocaleDateString()} - {new Date(customEndDate).toLocaleDateString()}
+                  </span>
+                )}
+
                 <button
                   onClick={handleExportPDF}
-                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold cursor-pointer"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  Export PDF
+                  Print Report
                 </button>
               </div>
             </div>
@@ -542,6 +669,132 @@ export default function AdminReportsPage() {
           </div>
         </div>
       </main>
+
+      {/* Custom Date Range Modal */}
+      {showCustomModal && (
+        <div className="fixed inset-0 bg-gray-500/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-[#333333]">Custom Date Range</h3>
+                <button
+                  onClick={() => setShowCustomModal(false)}
+                  className="text-gray-500 hover:text-gray-700 cursor-pointer"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-[#333333] mb-1">
+                    From Date
+                  </label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    max={customEndDate || undefined}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none text-[#333333]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-[#333333] mb-1">
+                    To Date
+                  </label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    min={customStartDate || undefined}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#FF6B35] focus:border-transparent outline-none text-[#333333]"
+                  />
+                </div>
+
+                {/* Quick Select Presets */}
+                <div className="pt-2 border-t border-gray-200">
+                  <p className="text-xs text-[#333333] opacity-70 mb-2">Quick Select:</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        const lastWeek = new Date(today);
+                        lastWeek.setDate(today.getDate() - 7);
+                        setCustomStartDate(lastWeek.toISOString().split('T')[0]);
+                        setCustomEndDate(today.toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-1 text-xs bg-[#F8F4F0] text-[#333333] rounded hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                      Last 7 Days
+                    </button>
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        const last30 = new Date(today);
+                        last30.setDate(today.getDate() - 30);
+                        setCustomStartDate(last30.toISOString().split('T')[0]);
+                        setCustomEndDate(today.toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-1 text-xs bg-[#F8F4F0] text-[#333333] rounded hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                      Last 30 Days
+                    </button>
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                        const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
+                        setCustomStartDate(lastMonth.toISOString().split('T')[0]);
+                        setCustomEndDate(lastMonthEnd.toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-1 text-xs bg-[#F8F4F0] text-[#333333] rounded hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                      Last Month
+                    </button>
+                    <button
+                      onClick={() => {
+                        const today = new Date();
+                        const last90 = new Date(today);
+                        last90.setDate(today.getDate() - 90);
+                        setCustomStartDate(last90.toISOString().split('T')[0]);
+                        setCustomEndDate(today.toISOString().split('T')[0]);
+                      }}
+                      className="px-2 py-1 text-xs bg-[#F8F4F0] text-[#333333] rounded hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                      Last 90 Days
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowCustomModal(false)}
+                  className="flex-1 px-4 py-2 text-sm border border-gray-300 text-[#333333] rounded-lg hover:bg-gray-100 transition-colors font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    if (customStartDate && customEndDate) {
+                      setDateRange('custom');
+                      setShowCustomModal(false);
+                      fetchReportData();
+                    }
+                  }}
+                  disabled={!customStartDate || !customEndDate}
+                  className="flex-1 px-4 py-2 text-sm bg-[#FF6B35] text-white rounded-lg hover:bg-[#e55a2b] transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

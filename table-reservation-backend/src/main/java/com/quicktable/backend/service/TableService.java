@@ -8,13 +8,17 @@ import com.quicktable.backend.exception.ResourceNotFoundException;
 import com.quicktable.backend.repository.RestaurantTableRepository;
 import com.quicktable.backend.util.DtoMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @SuppressWarnings("null")
@@ -43,13 +47,17 @@ public class TableService {
 
     public List<TableDTO> getAvailableTables(AvailableTablesRequest request) {
         // Assuming 2-hour reservation window
-        LocalTime startTime = request.getTime();
-        LocalTime endTime = startTime.plusHours(2);
+        // We need to find tables that don't have any reservations within 2 hours before or after the requested time
+        LocalTime requestTime = request.getTime();
+        LocalTime windowStart = requestTime.minusHours(2).isBefore(LocalTime.MIN.plusHours(2))
+                ? LocalTime.MIN : requestTime.minusHours(2);
+        LocalTime windowEnd = requestTime.plusHours(2).isAfter(LocalTime.MAX.minusHours(2))
+                ? LocalTime.MAX : requestTime.plusHours(2);
 
         List<RestaurantTable> availableTables = tableRepository.findAvailableTables(
                 request.getDate(),
-                startTime,
-                endTime,
+                windowStart,
+                windowEnd,
                 request.getGuests()
         );
 
@@ -163,5 +171,40 @@ public class TableService {
 
         long occupied = getOccupiedTablesCount();
         return (double) occupied / total * 100;
+    }
+
+    /**
+     * Scheduled task that runs every 10 minutes to automatically reset table status
+     * from RESERVED or OCCUPIED to AVAILABLE when their reservation time window has ended.
+     * This ensures tables don't stay in RESERVED/OCCUPIED state forever.
+     */
+    @Scheduled(fixedRate = 600000) // Run every 10 minutes (600,000 ms)
+    @Transactional
+    public void autoResetTableStatus() {
+        LocalDate today = LocalDate.now();
+        LocalTime currentTime = LocalTime.now();
+
+        // The reservation window is 2 hours
+        // A table should be reset if there are no reservations within the current 2-hour window
+        // We check for reservations from 2 hours ago to 2 hours from now
+        LocalTime windowStart = currentTime.minusHours(2).isBefore(LocalTime.MIN.plusHours(2))
+                ? LocalTime.MIN : currentTime.minusHours(2);
+        LocalTime windowEnd = currentTime.plusHours(2).isAfter(LocalTime.MAX.minusHours(2))
+                ? LocalTime.MAX : currentTime.plusHours(2);
+
+        List<RestaurantTable> tablesToReset = tableRepository.findTablesWithExpiredReservations(
+                today, windowStart, windowEnd
+        );
+
+        for (RestaurantTable table : tablesToReset) {
+            log.info("Auto-resetting table {} from {} to AVAILABLE (no active reservations in current time window)",
+                    table.getTableNumber(), table.getStatus());
+            table.setStatus(TableStatus.AVAILABLE);
+            tableRepository.save(table);
+        }
+
+        if (!tablesToReset.isEmpty()) {
+            log.info("Auto-reset {} table(s) to AVAILABLE status", tablesToReset.size());
+        }
     }
 }

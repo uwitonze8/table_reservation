@@ -50,6 +50,15 @@ public class StaffController {
         return ResponseEntity.ok(ApiResponse.success(reservations));
     }
 
+    @GetMapping("/reservations/range")
+    @Operation(summary = "Get reservations by date range")
+    public ResponseEntity<ApiResponse<List<ReservationDTO>>> getReservationsByDateRange(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        List<ReservationDTO> reservations = reservationService.getReservationsByDateRange(startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success(reservations));
+    }
+
     @GetMapping("/reservations/{id}")
     @Operation(summary = "Get reservation details")
     public ResponseEntity<ApiResponse<ReservationDTO>> getReservationById(@PathVariable Long id) {

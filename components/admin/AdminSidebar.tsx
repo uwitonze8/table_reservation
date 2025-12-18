@@ -2,10 +2,46 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { adminApi } from '@/lib/api';
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Handle logout
+  const handleLogout = () => {
+    // Clear all auth tokens from localStorage
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+
+    // Redirect to login page
+    router.push('/login');
+  };
+
+  // Fetch unread message count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await adminApi.getAllMessages(0, 1000);
+        if (response.success && response.data) {
+          const messages = response.data.content || [];
+          const unread = messages.filter((m: { read: boolean }) => !m.read).length;
+          setUnreadCount(unread);
+        }
+      } catch (err) {
+        console.error('Failed to fetch unread count:', err);
+      }
+    };
+
+    fetchUnreadCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const menuItems = [
     {
@@ -70,6 +106,7 @@ export default function AdminSidebar() {
         </svg>
       ),
       path: '/admin/messages',
+      badge: unreadCount,
     },
     {
       name: 'Reports',
@@ -100,6 +137,7 @@ export default function AdminSidebar() {
         <ul className="space-y-2">
           {menuItems.map((item) => {
             const isActive = pathname === item.path;
+            const badge = 'badge' in item ? item.badge : undefined;
             return (
               <li key={item.path}>
                 <Link
@@ -111,7 +149,14 @@ export default function AdminSidebar() {
                   }`}
                 >
                   {item.icon}
-                  <span className="font-medium">{item.name}</span>
+                  <span className="font-medium flex-1">{item.name}</span>
+                  {badge !== undefined && badge > 0 && (
+                    <span className={`min-w-[20px] h-5 px-1.5 rounded-full text-xs font-bold flex items-center justify-center ${
+                      isActive ? 'bg-white text-[#FF6B35]' : 'bg-[#FF6B35] text-white'
+                    }`}>
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
                 </Link>
               </li>
             );
@@ -132,15 +177,15 @@ export default function AdminSidebar() {
             <p className="text-gray-400 text-xs">Manager</p>
           </div>
         </div>
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm cursor-pointer"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
           </svg>
           Logout
-        </Link>
+        </button>
       </div>
     </aside>
   );
