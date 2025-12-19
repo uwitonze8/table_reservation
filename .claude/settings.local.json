@@ -21,7 +21,8 @@
       "Bash(docker-compose logs:*)",
       "Bash(docker-compose up:*)",
       "Bash(docker exec:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
