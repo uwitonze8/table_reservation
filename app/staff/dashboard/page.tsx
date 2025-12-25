@@ -136,7 +136,7 @@ export default function StaffDashboard() {
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
                 {error}
-                <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline">Retry</button>
+                <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline cursor-pointer">Retry</button>
               </div>
             )}
 
@@ -164,7 +164,7 @@ export default function StaffDashboard() {
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-bold text-[#333333]">Today's Reservations</h2>
-                <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold">
+                <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold cursor-pointer">
                   Refresh
                 </button>
               </div>
@@ -249,7 +249,7 @@ export default function StaffDashboard() {
             {error && (
               <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
                 {error}
-                <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline">Retry</button>
+                <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline cursor-pointer">Retry</button>
               </div>
             )}
 
@@ -277,7 +277,7 @@ export default function StaffDashboard() {
             <div className="bg-white rounded-lg shadow-md p-4 mb-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-bold text-[#333333]">Upcoming Arrivals</h2>
-                <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold">
+                <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold cursor-pointer">
                   Refresh
                 </button>
               </div>
@@ -344,7 +344,7 @@ export default function StaffDashboard() {
           {error && (
             <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
               {error}
-              <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline">Retry</button>
+              <button onClick={fetchDashboardData} className="ml-4 underline hover:no-underline cursor-pointer">Retry</button>
             </div>
           )}
 
@@ -372,7 +372,7 @@ export default function StaffDashboard() {
           <div className="bg-white rounded-lg shadow-md p-4 mb-4">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-bold text-[#333333]">Table Status</h2>
-              <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold">
+              <button onClick={fetchDashboardData} className="text-sm text-[#FF6B35] hover:text-[#e55a2b] font-semibold cursor-pointer">
                 Refresh
               </button>
             </div>

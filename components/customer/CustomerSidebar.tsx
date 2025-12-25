@@ -12,7 +12,7 @@ export default function CustomerSidebar() {
   const formatMemberSince = (dateString?: string): string => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   const memberSince = formatMemberSince(user?.createdAt);
